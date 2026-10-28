@@ -12,7 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 状态：**v0.1.15，计划 1「本地流水线」已完成**（Task 0–15 全部落地，每个任务单独提交）。不联网也能跑通「扫描 → 本地 NFO/封面导入 → 归位 → 媒体 → 出站」，产物从 `file://` 打开即可浏览播放。
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
-- 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`（已完成）。下一步写计划 2（联网刮削：来源链、分级、实体外站 ID、封面头像、代理与 Cookie）和计划 3（进度网页：FastAPI + SSE）。
+- 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`（已完成）。
+- 实施计划 2「联网刮削」：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`（已写好，待批准后**从 Task 0 开始按任务顺序执行**，版本从 0.2.0 起）。只接 peach 自写解析器的 8 个站（r18dev、dmm、1pondo、fc2、javarchive、avbase、javbus、javdb），落库按「单来源直接写、分歧按链结算、高档覆盖低档」。计划 3（进度网页：FastAPI + SSE）在计划 2 完成后再写。
 - 与计划的已知出入（以 peach 原函数实跑结果为准，不改规则）：`part_marker("ABP-758-cd1.mp4")` 返回 `"1"` 而不是 `"cd1"`；自定义正则抓到的段仍会归一化（`MYLABEL001` → `MYLABEL-001`）；`-C`（中字版）会被 peach 的 `_PART_MARKER` 当成分卷 `c`。
 - 参考克隆 `reference/peach`（`.gitignore` 排除，commit 见 `docs/REUSE.md`）；云端会话需要时重新 `git clone --depth 1 https://github.com/peach-mitao/peach.git reference/peach`。
 
