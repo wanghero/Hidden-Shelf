@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync                                  # 装依赖
 uv run pytest -v                         # 全部 Python 测试
 uv run pytest tests/test_codes.py -k 名字  # 单个测试
-node --test tests/js/                    # 前端纯逻辑测试
+node --test "tests/js/**/*.test.mjs"     # 前端纯逻辑测试（node 22 的 --test 要 glob，不接受目录）
 uv run shelf run <盘根目录>               # 全流程：扫描 → 导入本地资料 → 归位 → 媒体 → 出站
 ```
 
