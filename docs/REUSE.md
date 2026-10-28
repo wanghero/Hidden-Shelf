@@ -12,3 +12,5 @@
 | `tests/test_sidecars.py`（后半） | `tests/test_scan.py` | 搬入 `is_sidecar`、`medium_of` 相关断言 |
 | `src/hidden_shelf/rules/nfo.py` | `src/peach/library_nfo.py` | 去 SMB 与 `processing_traffic`；`read_nfo` 返回固定键字典；`for_video` 拆成 `nfo_for`/`images_for` |
 | `tests/test_nfo.py`（后半） | `tests/test_metadata_library.py` | 搬入 `read_nfo`/`sidecars`/`local_art` 断言 |
+| `src/hidden_shelf/field_owners.py` | `src/peach/field_owners.py` | 去乐观并发；表名/列名参数化；每字段各自归属（`FieldWrite`），返回 `{字段: 是否写入}` |
+| `tests/test_field_owners.py`（后半） | `tests/test_field_owners.py` | 搬入不依赖账本夹具的断言 |
