@@ -1,0 +1,19 @@
+/* 藏片阁 站点样式骨架（Task 12）；页面样式在 Task 14 补全。只引用 tokens.css 变量。 */
+.noscript {
+  margin: var(--space-6);
+  padding: var(--space-6);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.app { min-height: 100vh; }
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+}
