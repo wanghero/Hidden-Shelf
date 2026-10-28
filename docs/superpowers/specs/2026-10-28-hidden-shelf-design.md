@@ -1,6 +1,6 @@
 # Hidden Shelf（藏片阁）设计文档
 
-日期：2026-10-28 · 状态：草稿，待用户批准 · 参考项目：[peach-mitao/peach](https://github.com/peach-mitao/peach)（本机浅克隆在会话 scratchpad，正式开发时重新克隆到 `vendor/` 之外的参考目录）
+日期：2026-10-28 · 状态：审稿完成，待用户批准 · 参考项目：[peach-mitao/peach](https://github.com/peach-mitao/peach)（本机浅克隆在会话 scratchpad，正式开发时重新克隆到 `vendor/` 之外的参考目录）
 
 ## 1. 这是什么、为什么做
 
@@ -31,7 +31,7 @@ peach 已经把「认番号 → 多站刮削 → 归位文件 → 浏览」做�
 - 媒体只在本机磁盘或外接盘，不考虑网络文件系统。
 - 浏览产物从 `file://` 打开：Chrome/Safari 下脚本不能 `fetch` 本地 JSON，所以**数据必须打成 `<script src>` 能加载的 `.js` 文件**；视频、图片用相对路径；不能依赖任何 CDN。
 - 浏览器播不了的容器/编码（MKV、WMV、AVI、RMVB、部分 HEVC 等）页面上要标出来，给「复制路径」。
-- 刮削规则**完全按 peach**：番号识别、附属文件配对、内容类型判定、来源链顺序与停止条件、多源互证、字段优先级。不重新发明。
+- 刮削规则**按 peach**：番号识别、附属文件配对、内容类型判定、来源链顺序与停止条件、字段优先级照搬；多源互证按用户决定放宽（§3）。不重新发明。
 - peach 是 AGPL-3.0-or-later。从它移植代码，本项目也按 AGPL-3.0-or-later 发布，`LICENSE` 和 `docs/REUSE.md` 写明来源。仅自用时无额外义务。
 - 遵守用户全局规则：中文交流、每次改代码更新版本号、Web 界面按 `ux-standard`、端口按 `~/.claude/ports.md` 分配（实施时选 8000–8099 段空闲口，只监听 127.0.0.1）。
 - ffmpeg 用系统的（本机 `/usr/local/bin/ffmpeg`），找不到就报错并提示安装，不托管二进制。
@@ -48,6 +48,7 @@ peach 已经把「认番号 → 多站刮削 → 归位文件 → 浏览」做�
 | 盘里的图片 | 都是以前刮削器留下的封面、海报（无独立写真内容） |
 | 刮削器行为 | 完全按 peach（本地 NFO/封面优先于联网来源） |
 | 草图 | 不需要看，由 Claude 定 |
+| 单来源资料 | **最宽松**：联网资料只要有一家来源给了就直接写、直接按它归位，不要求两家互证，不进复核。封面同理，一个图源就安装 |
 
 ## 4. 我定下的事（用户可推翻）
 
@@ -90,7 +91,7 @@ peach 已经把「认番号 → 多站刮削 → 归位文件 → 浏览」做�
 四步串行，每步可单独跑，进度网页和命令行输出一致：
 
 1. **扫描**：遍历根目录（跳过 `.shelf/`、`未识别/`、系统垃圾），按 peach 的扩展名集登记视频，按 `is_sidecar` 规则识别封面/海报/NFO 并配对到同目录主文件。只写观测字段（大小、mtime、last_seen）；消失的文件不删行，标 `vanished`。认番号用移植的 `release_code_from_filename`，先过用户自定义正则。
-2. **刮削**：本地 NFO/封面先入库（`CHAIN_LOCAL_NFO`），再按 `metadata_routes` 的类型链逐站问，停止条件、互证、字段优先级照 peach。原始响应落 `sources/` 快照，新鲜就不再请求。失败只记日志不中断，不把「没拿到」缓存成「确认没有」。封面落 `covers/`，没有来源封面就用本地旧封面；都没有就从视频抽一帧当封面。
+2. **刮削**：本地 NFO/封面先入库（`CHAIN_LOCAL_NFO`），再按 `metadata_routes` 的类型链逐站问，停止条件和字段优先级照 peach；**落库不要求多源互证**（用户决定），单来源候选直接按 `metadata_policy` 的分级写入，分歧时高档位覆盖低档位，同档位先到先得。原始响应落 `sources/` 快照，新鲜就不再请求。失败只记日志不中断，不把「没拿到」缓存成「确认没有」。封面落 `covers/`，没有来源封面就用本地旧封面；都没有就从视频抽一帧当封面。
 3. **归位**：按 `organize.build_plan → apply_plan` 三段式。顺序固定：**备份库 → 动文件 → 改库，改库失败就把文件名改回去**。计划里的 `skip` 原因沿用 peach 枚举（字段缺失、目标已存在、路径过长……）并进日志。未识别文件按开关处理；附属文件按 4.2 搬去 `covers/` 或 `legacy/`。空目录在归位后清掉（只删空目录）。
 4. **出站**：ffmpeg 抽九宫格（源指纹不变就跳过）、生成艺人头像缩略图、渲染站点。
 
@@ -122,11 +123,22 @@ peach 已经把「认番号 → 多站刮削 → 归位文件 → 浏览」做�
 | `catalog_rules.py`（番号、附属文件、垃圾文件、类型判定，连同误判证据注释） | `web_*` 23 个 handler、React 前端、BoardUI |
 | `metadata_routes.py`、`metadata_policy.py`、`field_owners.py` | 任务系统、限流闸门、APScheduler |
 | `organize.py`、`organize_templates.py` | SMB/CloudDrive/PikPak/浏览器取页 |
-| `library_nfo.py`、`sources/` 下 peach 自写的解析器（javdb、javbus、dmm、r18dev、avbase、fc2 系、onepondo） | `metadata_amane.py` 桥和 amane 子进程（第一版不接；prestige/faleno/dahlia/mgstage/avsox 等经 amane 的来源缺位，影响面见 §6） |
-| `frame_capture.py`、九宫格、封面取景、`artifact_rules.py` 指纹 | 时间线预览（第二版再考虑）、人脸识别、Gfriends 头像库 |
+| `library_nfo.py`、`sources/` 下 peach 自写的解析器（javdb、javbus、dmm、r18dev、avbase、fc2、javarchive、onepondo）；`entities.py` 的实体层（`entity`/`entity_alias`/`entity_external_ref`/`asset_entity`）和别名解析（`metadata_alias_resolve`、`kanji`）精简移植 | `metadata_amane.py` 桥和 amane 子进程（第一版不接；prestige/faleno/dahlia/mgstage/avsox 等经 amane 的来源缺位，影响面见 §6）；`library_processing`、`metadata_auto_apply`、`scraping_access`、`jav_cover_fetch` 这四个编排模块不移植，见 §4.7 |
+| `frame_capture.py`、九宫格、`artifact_rules.py` 指纹 | 时间线预览（第二版再考虑）、人脸识别、Gfriends 头像库、`jav_poster_crop` 的 OpenCV 折痕检测、`face_detect` |
+| FC2 链裁成 `fc2 → javarchive → javdb`（`fc2cmadb`、`fc2ppvdb`、`javten` 要本机浏览器过 Cloudflare，不移植） | 浏览器取页（ADR-0065） |
 | `junk.py` | 关注、下载、想要、口味、统计、复核、诊断上报 |
 
 移植的每个模块保留 peach 的测试用例（它的 `tests/` 里对应文件）作为回归基线。
+
+### 4.7 审稿后补定的事（我的决定）
+
+- **刮削编排自写**。peach 真正执行刮削的 `library_processing`、`metadata_auto_apply`、`scraping_access`、`jav_cover_fetch` 约 6000 行，与任务系统、网盘、流量闸门缠在一起，不剥离。我们写一个薄编排层，行为对齐 peach 文档明文条款：逐档短路（一档把必填标量给全就停）、综合索引档整档问、原始快照 7 天内不重请求、「没拿到」不缓存成「没有」、403/429 按站冷却到下次运行。所以「刮削按 peach」的准确含义是：**规则模块照抄，跑法自写**。
+- **艺人身份**：移植实体层，艺人以实体 ID 为准，日文名/中文名/罗马字作别名归一；站点的艺人页和 `avatars/<艺人id>.jpg` 用实体 ID。用户在 `overrides.json` 里改的演员关联写成 `asset_entity.source = 'user'`，自动写入不许删改。
+- **头像**：第一版只用 r18.dev 返回的 DMM 官方头像（仅部分有码片有）；没有的站点显示首字圆标。不单独抓艺人页。
+- **封面**：取来源 payload 里的封面地址（优先级按 `metadata_policy`），本地旧封面优先于联网；都没有就 ffmpeg 抽帧。不做 Range 量像素选图。
+- **竖版海报**：按比例裁封面右侧（peach `jav_poster_crop` 的 `ratio` 先验），用 Pillow 物理生成 `posters/<番号>.jpg`；不引 OpenCV，不存坐标让前端裁。
+- **Cookie**：`~/.hidden-shelf/config.json` 每个来源可选一个 Cookie 字符串（javdb 登录后女优栏更全），默认空。`curl_cffi` 只在需要浏览器指纹的站用，否则 `httpx`。
+- **测试**：把 peach 相关测试文件里的断言搬到我们自己的夹具上（番号识别、归位计划、路由、分级），不要求 peach 测试文件原样通过；账本路径改成相对盘根的 POSIX 形态，不沿用 peach 的 Windows 形态。
 
 ## 5. 留给建造者决定的
 
