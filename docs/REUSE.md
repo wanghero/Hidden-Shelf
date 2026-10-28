@@ -10,3 +10,5 @@
 | `tests/test_codes.py`（后半） | `tests/test_jav_code_domain.py` | 搬入不依赖账本与其他模块的断言，改 import |
 | `src/hidden_shelf/rules/sidecars.py` | `src/peach/scan.py`（`ARTWORK*`、`_DERIVED_THUMB`、`medium_of`、`video_stems`、`is_sidecar`） | 加 `nfo`/`subtitle` 档与 `sidecar_kind`；去掉多根参数；同名图片与字幕也算附属 |
 | `tests/test_sidecars.py`（后半） | `tests/test_scan.py` | 搬入 `is_sidecar`、`medium_of` 相关断言 |
+| `src/hidden_shelf/rules/nfo.py` | `src/peach/library_nfo.py` | 去 SMB 与 `processing_traffic`；`read_nfo` 返回固定键字典；`for_video` 拆成 `nfo_for`/`images_for` |
+| `tests/test_nfo.py`（后半） | `tests/test_metadata_library.py` | 搬入 `read_nfo`/`sidecars`/`local_art` 断言 |
