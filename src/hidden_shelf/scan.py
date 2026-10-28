@@ -215,6 +215,9 @@ def _register_video(connection, rel: str, name: str, size: int, mtime: float, no
         connection.execute(
             "UPDATE asset SET name=?,size=?,mtime=?,last_seen=?,vanished=0 WHERE id=?",
             (name, size, mtime, now, asset_id))
+        if changed:
+            # 文件内容变了，上次的探测结果作废，媒体步骤会重新探测。
+            connection.execute("UPDATE asset SET probed_at=NULL WHERE id=?", (asset_id,))
         added, updated = 0, int(changed)
     code = release_code_from_filename(name, patterns=patterns)
     if code:

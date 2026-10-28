@@ -17,3 +17,7 @@
 | `src/hidden_shelf/organize/templates.py` | `src/peach/organize_templates.py` | `ntpath` → `posixpath`；去 `mosaic` 占位符与界面示例；`render` 返回字符串，缺失字段由 `missing_fields` 给出 |
 | `tests/test_templates.py`（后半） | `tests/test_organize.py`（模板部分） | 搬入渲染表、清洗与逃逸断言 |
 | `src/hidden_shelf/organize/plan.py`、`organize/apply.py` | `src/peach/organize.py`（`placeholder_values`、`_definition`、`build_plan`、`_move_one`、`apply_plan`、`rollback_batch`、`SKIP_*`） | 按单盘根与 POSIX 相对路径重写；JSONL 批次日志；附属文件搬 `legacy/` 或随未识别视频 |
+| `src/hidden_shelf/media/frames.py` | `src/peach/frame_capture.py` | 去 `processing_control`、`ffmpeg_options`、SMB、硬解与诊断上报 |
+| `src/hidden_shelf/media/fingerprint.py` | `src/peach/artifact_rules.py` | 去 `upgrade_rules` 与资源类来源；边车 `.rule` 存 JSON |
+| `src/hidden_shelf/media/covers.py`（海报比例常量） | `src/peach/jav_poster_crop.py`（`SLEEVE_RATIO_*`、`PANEL_ASPECT`） | 只取 `ratio` 先验，不做 OpenCV 折痕检测 |
+| `src/hidden_shelf/fsutil.py` | `src/peach/fsutil.py` | 去 Windows 占用重试与权限位 |
