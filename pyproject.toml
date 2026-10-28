@@ -1,6 +1,6 @@
 [project]
 name = "hidden-shelf"
-version = "0.1.4"
+version = "0.1.5"
 description = "Hidden Shelf（藏片阁）：本地番号片整理器，归位文件并在盘根目录生成纯静态站"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
