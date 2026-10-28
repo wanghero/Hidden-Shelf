@@ -6,7 +6,7 @@
 
 **Architecture:** Python 包 `hidden_shelf`，策略模块从 peach 移植（番号识别、附属文件、NFO、字段归属、归位模板），编排层自写；SQLite 工作库和全部产物住在盘根目录的 `.shelf/` 下；静态站是「一个根 `index.html` + `.shelf/site/` 下的 app.js/app.css/data/*.js」的 hash 路由单页应用，数据以 `window.__shelf.*` 赋值的 JS 文件形式随站携带。
 
-**Tech Stack:** Python ≥ 3.12 · uv · SQLite（stdlib）· Pillow · Jinja2 · 系统 ffmpeg/ffprobe · 前端纯 HTML/CSS/JS（`ux-standard` 的 `tokens.css` + `ripple.js`）· pytest · node 内建 `--test`（只测前端纯逻辑）
+**Tech Stack:** Python ≥ 3.12 · uv · SQLite（stdlib）· Pillow · Jinja2 · 系统 ffmpeg/ffprobe（云上环境用 `apt-get install -y ffmpeg`）· 前端纯 HTML/CSS/JS（`docs/ux-standard/` 的 `tokens.css` + `ripple.js`）· pytest · node 内建 `--test`（只测前端纯逻辑）
 
 **Spec:** `docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`
 
@@ -23,7 +23,7 @@
 - 归位固定顺序：备份库 → 动文件 → 改库；改库失败把文件改回去。
 - `field_owners`：`user:*` 与 `review:*` 的字段，自动写入一律不许改。
 - 静态站从 `file://` 打开：数据只能用 `<script src>` 加载的 `.js`，不能 `fetch`；视频和图片用相对路径；不加载任何外网资源（含字体）。
-- 前端外观按 `~/.claude/skills/ux-standard/SKILL.md`：颜色、字号、间距只引用 `tokens.css` 变量；浅/深/系统主题；中英双语字典；加载/空/错误三态；可点击元素有波纹。字体栈用系统字体回退，不联网。
+- 前端外观按 `docs/ux-standard/SKILL.md`（本机 `~/.claude/skills/ux-standard/` 的副本，云上环境用仓库内这份）：颜色、字号、间距只引用 `tokens.css` 变量；浅/深/系统主题；中英双语字典；加载/空/错误三态；可点击元素有波纹。字体栈用系统字体回退，不联网。
 - 许可 AGPL-3.0-or-later；`docs/REUSE.md` 登记每个移植模块的 peach 源文件。
 - 每个 git commit 用中文说明；每次改代码更新 `pyproject.toml` 的 `version`（本计划从 0.1.0 起，每个任务提交 +0.0.1）。
 - 与用户交流用中文；代码注释中文；标识符英文。
@@ -76,8 +76,8 @@ Hidden-Shelf/
       build.py                        查询库 → 视图模型 → data/*.js → 渲染 index.html → 拷静态文件
       playability.py                  容器/编码 → play_hint
       templates/index.html.j2
-      static/tokens.css               复制自 ~/.claude/skills/ux-standard/tokens.css
-      static/ripple.js                复制自 ~/.claude/skills/ux-standard/ripple.js
+      static/tokens.css               复制自 docs/ux-standard/tokens.css
+      static/ripple.js                复制自 docs/ux-standard/ripple.js
       static/shelf-core.js            纯逻辑（搜索/筛选/排序/路径编码/可播放判定），UMD，node 可测
       static/app.js                   hash 路由与渲染
       static/app.css
@@ -493,7 +493,7 @@ def test_code_kinds():
 - 错误态：`window.__shelf` 缺失或 data 文件加载失败（`<script onerror>`）时显示「站点数据不完整，请重新运行 shelf build」。
 - 无障碍：侧栏与卡片可键盘到达；图片有 alt；对比度按 tokens。
 
-- [ ] **Step 1: 按 `ux-standard` SKILL.md 第 0 节检查**：`tokens.css`、`ripple.js` 已在 Task 12 复制；`app.css` 只用变量，不出现裸色值（用 `grep -nE "#[0-9a-fA-F]{3,6}|rgb\(" app.css` 自查，Expected 无输出）。
+- [ ] **Step 1: 按 `docs/ux-standard/SKILL.md` 第 0 节检查**：`tokens.css`、`ripple.js` 已在 Task 12 复制；`app.css` 只用变量，不出现裸色值（用 `grep -nE "#[0-9a-fA-F]{3,6}|rgb\(" app.css` 自查，Expected 无输出）。
 - [ ] **Step 2: 写 `i18n.js`、`app.css`、`app.js`**，按上面要求。
 - [ ] **Step 3: 造一个演示盘**：`uv run python -m hidden_shelf.cli run <tmp 盘>`（Task 15 之前可先用 `tests` 里同样的 fixture 脚本手工生成：3 部假视频 + 1 个未识别 + NFO），然后 `open <tmp 盘>/index.html`。
 - [ ] **Step 4: 手动验证清单**（Chrome 与 Safari 各一遍；可用 claude-in-chrome 截图）：海报墙出图；搜索番号出现一张；筛选厂牌计数正确；点卡片进详情，`<video>` 能播放假视频；多碟切换可用；把一部的扩展名改成 `.mkv` 重 build 后显示「需外部播放器」+ 复制路径可用；主题切换与语言切换刷新后保留；`#/unrecognized` 列出那一条；控制台无报错。
