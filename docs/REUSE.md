@@ -16,3 +16,4 @@
 | `tests/test_field_owners.py`（后半） | `tests/test_field_owners.py` | 搬入不依赖账本夹具的断言 |
 | `src/hidden_shelf/organize/templates.py` | `src/peach/organize_templates.py` | `ntpath` → `posixpath`；去 `mosaic` 占位符与界面示例；`render` 返回字符串，缺失字段由 `missing_fields` 给出 |
 | `tests/test_templates.py`（后半） | `tests/test_organize.py`（模板部分） | 搬入渲染表、清洗与逃逸断言 |
+| `src/hidden_shelf/organize/plan.py`、`organize/apply.py` | `src/peach/organize.py`（`placeholder_values`、`_definition`、`build_plan`、`_move_one`、`apply_plan`、`rollback_batch`、`SKIP_*`） | 按单盘根与 POSIX 相对路径重写；JSONL 批次日志；附属文件搬 `legacy/` 或随未识别视频 |
