@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 状态：**v0.2.11，计划 1「本地流水线」与计划 2「联网刮削」都已完成**（计划 2 Task 0–11 每个任务单独提交，版本 0.2.0 → 0.2.11）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`；拔网线照样跑通，`scrape` 一步失败只记本步不拦后续。
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
 - 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`（已完成）；实施计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`（已完成）。
-- 下一步：计划 3「进度网页」（FastAPI + SSE，`Progress` 协议的 SSE 实现）待写、待批准。
+- 实施计划 3「进度网页」：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`（已写好，待批准后**从 Task 0 开始按任务顺序执行**，版本从 0.3.0 起到 0.3.5）。FastAPI + uvicorn 只监听 127.0.0.1（默认口 8031，8000–8099 段），`Progress` 协议翻成带序号的 SSE 事件，单运行、步间取消、同源防护；前端纯 HTML + 原生 JS 按 ux-standard。
 - 计划 2 的真实来源冒烟（`scripts/smoke_sources.py`）在云端会话里**未做**（容器无出站外网），本机有网时按计划 2 Task 11 Step 2 的清单补跑。
 - 与计划的已知出入（以 peach 原函数实跑结果为准，不改规则）：`part_marker("ABP-758-cd1.mp4")` 返回 `"1"` 而不是 `"cd1"`；自定义正则抓到的段仍会归一化（`MYLABEL001` → `MYLABEL-001`）；`-C`（中字版）会被 peach 的 `_PART_MARKER` 当成分卷 `c`。计划 2 的出入：javdb 快照不带 peach 的 `javdb_rule`；企划名义剪不出艺名的整条丢弃（没有复核队列）；带敬称的写法（`木村さん`）按企划名义丢弃。
 - 参考克隆 `reference/peach`（`.gitignore` 排除，commit 见 `docs/REUSE.md`）；云端会话需要时重新 `git clone --depth 1 https://github.com/peach-mitao/peach.git reference/peach`。
@@ -65,4 +65,4 @@ uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbu
 
 ## 端口约束
 
-- 本项目计划 1、2 不开端口。计划 3 的进度网页需要端口时先 `cat ~/.claude/ports.md`（仅本机），按 8000–8099 段选空闲口，只监听 127.0.0.1，分配后写回 ports.md 并在本节登记。
+- 本项目计划 1、2 不开端口。计划 3 的进度网页 `shelf serve` 暂定默认口 **8031**（8000–8099 段，只监听 127.0.0.1，被占时在段内往后找）；本机实施时先 `cat ~/.claude/ports.md`（仅本机），若 8031 已被别的项目登记就换一个空闲口，分配后写回 ports.md 并更新本节与 `serve/ports.py` 的 `DEFAULT_PORT`。
