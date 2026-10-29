@@ -21,6 +21,7 @@
 - **身份核对压在一切之上**：来源返回的番号与问的对不上（`identity.identifies_code`）整条记录不落库、不进快照 `result`（记成 `error.reason = "identity_mismatch"`，当「没有」对待）。
 - **「没拿到」不缓存成「没有」**：只有 `not_found` 类（`FailureReason.NOT_FOUND / GONE / NO_USABLE_METADATA`）和身份错配写进快照并记 7 天；超时、5xx、网络、限流、拒绝访问一概不写快照。
 - **冷却按站、按次运行**：403 首停 15 分钟、连续再撞翻倍到该站上限；429 按 `Retry-After`（没有就 15 分钟）。冷却记在 `.shelf/sources/_cooldown.json`，本趟后面的番号直接跳过这一站，下次运行到期才问。
+- **逐家短路，综合索引也不例外**（用户 2026-10-29 决定「有一家答了就停」）：链上每一站各是一档，一站把这一行还缺的必填标量（标题、演员、厂牌、发行日）给全就不问下一站；只缺列表字段时第一站给出资料就停。javdb 排在链尾，只在前面都落空时才问。
 - 主机间隔：默认 2 秒，javdb 3 秒（页面与图床同计）。整个进程一把限速器。
 - 请求只发 HTTPS，重定向只跟 HTTPS，跨域不带 Cookie；页面大小有上限（各站 `SiteConfig.page_limit`）。User-Agent 用一份标准桌面 Chrome 串。
 - 配置分两层：本盘 `.shelf/config.json` 加 `scrape: bool`（默认 true）；跨盘 `~/.hidden-shelf/config.json` 放代理三选一、各站 Cookie 与开关、路由覆盖。**凭据不进盘里的任何文件**，不进日志，不进快照。
@@ -170,7 +171,8 @@ Hidden-Shelf/
   - `uncensored: ("1pondo", "avbase", "javbus", "javdb")`
   - `fc2: ("fc2", "javarchive", "javdb")`
   - `kmib / other / unknown: ()`，`unsure: ("avbase", "javbus", "javdb")`
-- `OFFICIAL_STAGE = ("r18dev", "dmm", "1pondo", "fc2", "javarchive")`、`FC2_STAGE = ("fc2", "javarchive")`、`COMMUNITY_STAGE = ("avbase", "javbus", "javdb")`、`LIST_FIELD_DEPTH = 3`、`SCALAR_FIELDS`、`LIST_FIELDS`、`OFFICIAL_STAGE_NAMES = ("r18dev", "1pondo", "fc2")`；`parse_route_overrides`、`route`、`route_for_code(code, *hints, overrides=None)`（1pondo 要证据照 peach；`MAKER_EVIDENCE` 整段删掉）、`community_route`、`stages_for_code`、`stage_name`、`stages_for_chain`、`stage_members`、`official_route`、`required_scalars`、`settles(required, provided, *, wants_tags=False, then="")`。
+- `OFFICIAL_STAGE = ("r18dev", "dmm", "1pondo", "fc2", "javarchive")`、`FC2_STAGE = ("fc2", "javarchive")`、`COMMUNITY_SOURCES = ("avbase", "javbus", "javdb")`、`SCALAR_FIELDS`、`LIST_FIELDS`、`OFFICIAL_STAGE_NAMES = ("r18dev", "1pondo", "fc2")`；`parse_route_overrides`、`route`、`route_for_code(code, *hints, overrides=None)`（1pondo 要证据照 peach；`MAKER_EVIDENCE` 整段删掉）、`stages_for_code`、`stage_name`、`stages_for_chain`、`stage_members`、`official_route`、`required_scalars`、`settles(required, provided, *, wants_tags=False, then="")`。
+- **与 peach 的差别（用户 2026-10-29 决定「有一家答了就停」）**：综合索引三家**不合成一档**，`stage_name` 把 avbase、javbus、javdb 各算一档，与官方档一样逐家短路：一家把这一行还缺的必填标量给全就停；这一行只缺列表字段（标签、封面）时，第一家给出资料就停。peach 的 `COMMUNITY_STAGE`、`LIST_FIELD_DEPTH`、`community_route` 不移植——它们服务于两家互证，本项目不互证。`settles` 的 `wants_tags` 例外照旧：缺标签时在官方档之间多问一家，下一档是综合索引就停。
 
 - [ ] **Step 1: 写失败测试**：搬 peach `ClassifyTests`（形状分类；本机证据把 `LUXU-688` + `259LUXU-688.mp4` 判素人；国产标记判 other；读错号判 unsure）、`RouteTableTests` 按裁剪后的表改期望（有码不问 mgstage/prestige；素人不问 dmm；无码不问 r18dev；FC2 只问 fc2、javarchive、javdb；1pondo 只在证据指着一本道时在链上）、`StageTests`、`ShortCircuitTests`（`settles` 的几种情形）、`OverrideTests`（整条替换；未知来源名报错；空链合法）；policy：搬 `MetadataPolicyTests`（链上每站登记一次；有码标签 javdb 链首；nfo 层级 0；javbus 兜底；发行方排在 r18dev 前）+ `test_owner_tier`。
 - [ ] **Step 2: 运行**，FAIL。
@@ -325,7 +327,7 @@ Hidden-Shelf/
   1. 建 `Cooldown`、`Snapshots`、`SourceTransport`（`transport` 可注入假传输）。
   2. 按 `code_key` 分组未消失视频；每组一次。`apply.should_scrape` 判要不要问、缺什么。
   3. 本机证据 `hints = (path, name, studio)`；`chain = routes.route_for_code(code, *hints, overrides=global_config.routes)`；去掉 `global_config.sources[x].enabled == False` 的站。
-  4. 按 `stages_for_chain` 逐档：成员里剔掉 `snapshots.fresh_miss` 与冷却中的；先读新鲜快照，再问没快照的；每站 `SiteSource.records()`；`identifies_code` 核身份（解析器已核，这里再核 `payload`）；成功 `save_result`，`not_found` 类与错配 `save_miss`，其余只记日志；`SourcePaused` 记进 `paused` 并跳过该站；`settles(required, given, wants_tags, then)` 真则停。综合索引档整档问（最多 3 家）。
+  4. 按 `stages_for_chain` 逐档：成员里剔掉 `snapshots.fresh_miss` 与冷却中的；先读新鲜快照，再问没快照的；每站 `SiteSource.records()`；`identifies_code` 核身份（解析器已核，这里再核 `payload`）；成功 `save_result`，`not_found` 类与错配 `save_miss`，其余只记日志；`SourcePaused` 记进 `paused` 并跳过该站；`settles(required, given, wants_tags, then)` 真则停。综合索引三家也各是一档、逐家短路（有一家答了就停），不整档问。
   5. `settle.extract` 全部记录 → `settle.settle` → `apply.apply_settled`。
   6. 缺封面时 `covers.candidates_from_records` → `best_cover` → `install_online_cover`；`NotFound` 记 `snapshots.save_miss(code, "cover", ...)` 7 天。
   7. 全部番号跑完后 `avatars.install_avatars`。
@@ -335,7 +337,7 @@ Hidden-Shelf/
 - `cli`：子命令 `scrape <root>`；`run` 默认含 scrape；通用选项 `--offline`（本次跳过刮削）、`--force-scrape`（忽略 7 天与「全齐」）、`--sources r18dev,javdb`（本次只问这几家）、`--routes "censored=r18dev,javdb"`（整条覆盖）；`shelf config`（打印 `~/.hidden-shelf/config.json` 路径与当前代理模式、各站是否有 Cookie、冷却状态；不打印 Cookie 值）。
 - `site/build.py`：`entities.performers[].avatar = ".shelf/avatars/<id>.jpg"`（文件存在时），`works[].sources = [{source, url}]`（快照里的 `source_url`，前端详情页可列出处链接——`<a target=_blank>`，是外链不是资源加载）。
 
-- [ ] **Step 1: 写失败测试**（全部用假传输：一个 `dict[url -> body | Exception]` 的回放器，按 Task 4–6 的夹具拼）：`test_scrape_end_to_end_censored`（`ABP-758`：r18dev 两页 + javdb 两页；断言标题/厂牌/发行日/演员/标签落库、归属 `auto:r18dev`/`auto:javdb`、封面从 DMM CDN 高清变体装上、快照两份、`scraped_at` 写了、进度行）、`test_short_circuit_stops_after_official_stage`（r18dev 给全必填 → 不问 dmm，但综合索引档仍问（标签与图源）——按 spec §4.7「综合索引档整档问」；若 `tags` 已由 r18dev 给出且缺的只有封面，综合索引档仍问以取图源）、`test_snapshot_is_reused_within_7_days`（第二次 `scrape_assets` 零请求）、`test_not_found_is_remembered_and_transient_is_not`（Review Focus 4）、`test_403_pauses_site_for_the_run`（Review Focus 3：javdb 第一个番号 403，第二个番号对 javdb 零请求，`_cooldown.json` 有记录，`paused == ["javdb"]`）、`test_identity_mismatch_rejected`（Review Focus 1：r18dev 回别的 `content_id`）、`test_user_and_nfo_fields_survive`（Review Focus 2）、`test_offline_network_down_does_not_raise`（Review Focus 5）、`test_disabled_source_is_skipped`、`test_only_sources_option`、`test_pipeline_includes_scrape_and_continues_on_failure`（monkeypatch `scrape_assets` 抛 → run 仍 ok，`run` 表 scrape 行 `failed`，index.html 存在）、`test_cli_offline_flag`、`test_cli_config_prints_without_cookie_values`、`test_site_build_performer_avatar_and_sources`。
+- [ ] **Step 1: 写失败测试**（全部用假传输：一个 `dict[url -> body | Exception]` 的回放器，按 Task 4–6 的夹具拼）：`test_scrape_end_to_end_censored`（`ABP-758`：r18dev 两页 + javdb 两页；断言标题/厂牌/发行日/演员/标签落库、归属 `auto:r18dev`/`auto:javdb`、封面从 DMM CDN 高清变体装上、快照两份、`scraped_at` 写了、进度行）、`test_short_circuit_stops_after_official_stage`（r18dev 给全必填标量与标签 → dmm、avbase、javbus、javdb 零请求；封面只用 r18dev 给的图源）、`test_community_sources_stop_at_the_first_answer`（r18dev、dmm 都 404 → avbase 给全 → javbus、javdb 零请求；avbase 只给标题没给演员 → 接着问 javbus，javbus 给了演员就停，javdb 零请求）、`test_snapshot_is_reused_within_7_days`（第二次 `scrape_assets` 零请求）、`test_not_found_is_remembered_and_transient_is_not`（Review Focus 4）、`test_403_pauses_site_for_the_run`（Review Focus 3：javdb 第一个番号 403，第二个番号对 javdb 零请求，`_cooldown.json` 有记录，`paused == ["javdb"]`）、`test_identity_mismatch_rejected`（Review Focus 1：r18dev 回别的 `content_id`）、`test_user_and_nfo_fields_survive`（Review Focus 2）、`test_offline_network_down_does_not_raise`（Review Focus 5）、`test_disabled_source_is_skipped`、`test_only_sources_option`、`test_pipeline_includes_scrape_and_continues_on_failure`（monkeypatch `scrape_assets` 抛 → run 仍 ok，`run` 表 scrape 行 `failed`，index.html 存在）、`test_cli_offline_flag`、`test_cli_config_prints_without_cookie_values`、`test_site_build_performer_avatar_and_sources`。
 - [ ] **Step 2: 运行**，FAIL。
 - [ ] **Step 3: 实现**。
 - [ ] **Step 4: 运行全部** `uv run pytest -v && node --test "tests/js/**/*.test.mjs"`，PASS。
