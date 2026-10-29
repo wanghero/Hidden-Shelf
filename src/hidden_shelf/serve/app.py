@@ -1,7 +1,8 @@
 """进度网页的 HTTP 层：一页静态界面、三个 JSON 接口、一条 SSE 流。只打算监听 127.0.0.1。
 
-同源防护：`POST` 要带 `X-Shelf-Request: 1`，且 `Origin`（没有则 `Referer`）的主机是 `127.0.0.1` 或 `localhost`，
-否则 403——挡住别的网页借浏览器打 localhost。`GET` 不查（页面、静态文件、SSE）。
+同源防护：`POST` 和 `GET /api/browse` 要带 `X-Shelf-Request: 1`，且 `Origin`（没有则 `Referer`）的主机是 `127.0.0.1` 或
+`localhost`，否则 403——挡住别的网页借浏览器打 localhost。其余 `GET` 不查（页面、静态文件、状态、SSE）。
+目录列举只列目录、不读文件（`browse.py`），响应 `no-store`。
 SSE：先按 `Last-Event-ID` 补发，再订阅实时事件；运行已结束则补完即停；15 秒没事件发 `: ping` 保活。
 """
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import queue
 import webbrowser
 from collections.abc import Callable, Iterator
+from dataclasses import asdict
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -17,6 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .. import __version__, pipeline
+from .browse import BrowseError, list_directory, list_roots
 from .events import RunLog
 from .runner import RunBusy, RunManager, RunOptions
 
@@ -27,6 +30,8 @@ REQUEST_HEADER = "x-shelf-request"
 TRUSTED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
 PING_SECONDS = 15.0
 STATIC_TYPES = {".css": "text/css", ".js": "application/javascript", ".svg": "image/svg+xml", ".png": "image/png"}
+#: 读本机目录结构的 GET 也要过同源校验。
+GUARDED_GET_PATHS = frozenset({"/api/browse"})
 
 
 def _trusted_origin(request: Request) -> bool:
@@ -76,7 +81,8 @@ def create_app(manager: RunManager | None = None, *, static_dir: Path = STATIC_D
 
     @app.middleware("http")
     async def same_origin_guard(request: Request, call_next):
-        if request.method in ("POST", "PUT", "PATCH", "DELETE") and not _trusted_origin(request):
+        guarded = request.method in ("POST", "PUT", "PATCH", "DELETE") or request.url.path in GUARDED_GET_PATHS
+        if guarded and not _trusted_origin(request):
             return JSONResponse({"error": "请求来源不被信任"}, status_code=403)
         return await call_next(request)
 
@@ -135,6 +141,17 @@ def create_app(manager: RunManager | None = None, *, static_dir: Path = STATIC_D
         uri = index_html.resolve().as_uri()
         opener(uri)
         return {"opened": uri}
+
+    @app.get("/api/browse")
+    def browse(path: str = "", show_hidden: str = "0"):
+        headers = {"Cache-Control": "no-store"}
+        if not path:
+            return JSONResponse({"roots": [asdict(root) for root in list_roots()]}, headers=headers)
+        try:
+            listing = list_directory(path, show_hidden=show_hidden == "1")
+        except BrowseError as error:
+            return JSONResponse({"error": error.message}, status_code=error.status, headers=headers)
+        return JSONResponse(asdict(listing), headers=headers)
 
     @app.get("/api/events")
     def events(request: Request, run: str | None = None):

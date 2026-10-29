@@ -152,3 +152,74 @@ def test_roots_default_includes_home_and_never_raises():
     roots = list_roots()
     assert any(r.path == str(Path.home()) for r in roots)
     assert all(Path(r.path).is_dir() for r in roots)
+
+
+# ---------- GET /api/browse ----------
+
+from urllib.parse import quote  # noqa: E402
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from hidden_shelf.serve.app import create_app  # noqa: E402
+from hidden_shelf.serve.runner import RunManager  # noqa: E402
+from serve_fakes import fake_pipeline  # noqa: E402
+
+HEADERS = {"X-Shelf-Request": "1", "Origin": "http://127.0.0.1:8031"}
+
+
+@pytest.fixture
+def client(tmp_path: Path) -> TestClient:
+    manager = RunManager(home=tmp_path / "home", run_pipeline=fake_pipeline())
+    return TestClient(create_app(manager, opener=lambda uri: None, ping_seconds=0.05))
+
+
+def test_browse_roots(client: TestClient):
+    response = client.get("/api/browse", headers=HEADERS)
+    assert response.status_code == 200
+    roots = response.json()["roots"]
+    assert roots and {"name", "path", "has_shelf"} <= set(roots[0])
+    assert any(r["path"] == str(Path.home()) for r in roots)
+    assert response.headers["cache-control"] == "no-store"
+    assert client.get("/api/browse?path=", headers=HEADERS).json()["roots"] == roots, "空 path 同缺省"
+
+
+def test_browse_lists_tmp_dir(client: TestClient, tree: Path):
+    response = client.get(f"/api/browse?path={quote(str(tree))}", headers=HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["path"] == str(tree) and data["parent"] == str(tree.parent)
+    assert [e["name"] for e in data["entries"]] == ["Prestige", "中文 目录#1"]
+    assert data["entries"][1]["path"] == str(tree / "中文 目录#1"), "空格、中文、# 原样取到"
+    assert data["has_shelf"] is True and data["truncated"] is False and data["writable"] is True
+    assert set(data) == {"path", "parent", "entries", "truncated", "has_shelf", "writable"}
+    hidden = client.get(f"/api/browse?path={quote(str(tree))}&show_hidden=1", headers=HEADERS).json()
+    assert ".hidden" in [e["name"] for e in hidden["entries"]]
+    plain = client.get(f"/api/browse?path={quote(str(tree))}&show_hidden=0", headers=HEADERS).json()
+    assert ".hidden" not in [e["name"] for e in plain["entries"]]
+
+
+def test_browse_errors_map_status(client: TestClient, tree: Path, monkeypatch):
+    missing = client.get(f"/api/browse?path={quote(str(tree / 'nope'))}", headers=HEADERS)
+    assert missing.status_code == 404 and missing.json() == {"error": "目录不存在"}
+    relative = client.get("/api/browse?path=relative", headers=HEADERS)
+    assert relative.status_code == 400 and "绝对路径" in relative.json()["error"]
+    dots = client.get(f"/api/browse?path={quote(str(tree / '..' / 'x'))}", headers=HEADERS)
+    assert dots.status_code == 400 and ".." in dots.json()["error"]
+    file_ = client.get(f"/api/browse?path={quote(str(tree / 'file.txt'))}", headers=HEADERS)
+    assert file_.status_code == 400 and file_.json()["error"] == "不是目录"
+
+    def denied(path):
+        raise PermissionError(13, "Permission denied", str(path))
+    monkeypatch.setattr(os, "scandir", denied)
+    forbidden = client.get(f"/api/browse?path={quote(str(tree))}", headers=HEADERS)
+    assert forbidden.status_code == 403 and forbidden.json() == {"error": "没有读取权限"}
+
+
+def test_browse_requires_header_and_origin(client: TestClient, tree: Path):
+    url = f"/api/browse?path={quote(str(tree))}"
+    assert client.get(url).status_code == 403, "没有 X-Shelf-Request"
+    assert client.get(url, headers={"X-Shelf-Request": "1"}).status_code == 403, "没有来源"
+    evil = client.get(url, headers={"X-Shelf-Request": "1", "Origin": "https://evil.example"})
+    assert evil.status_code == 403 and evil.json()["error"] == "请求来源不被信任"
+    assert client.get(url, headers={"X-Shelf-Request": "1", "Referer": "http://localhost:8031/"}).status_code == 200
+    assert client.get("/api/state", headers={"Origin": "https://evil.example"}).status_code == 200, "别的 GET 照旧不查"
