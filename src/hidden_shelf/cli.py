@@ -39,7 +39,39 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--verbose", "-v", action="store_true", help="打印更多日志")
     config_cmd = subparsers.add_parser("config", help="打印全局配置位置、代理模式、各站 Cookie 有无与冷却状态（不打印 Cookie 值）")
     config_cmd.add_argument("root", nargs="?", help="盘根目录（给出时一并打印该盘的来源冷却状态）")
+    serve_cmd = subparsers.add_parser("serve", help="起进度网页（只监听 127.0.0.1，默认端口 8031）并打开浏览器")
+    serve_cmd.add_argument("--port", type=int, help="指定端口；被占就报错退出，不自动换口")
+    serve_cmd.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+    serve_cmd.add_argument("--verbose", "-v", action="store_true", help="打印 uvicorn 的访问日志")
     return parser
+
+
+def _serve(args) -> int:
+    import webbrowser
+
+    import uvicorn
+
+    from .serve.app import create_app
+    from .serve.ports import DEFAULT_PORT, HOST, PortInUse, pick_port
+    from .serve.runner import RunManager
+
+    try:
+        port = pick_port(args.port)
+    except PortInUse as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    url = f"http://{HOST}:{port}/"
+    if args.port is None and port != DEFAULT_PORT:
+        print(f"默认端口 {DEFAULT_PORT} 被占，改用 {port}")
+    print(f"进度网页：{url}")
+    print("按 Ctrl+C 停止")
+    if not args.no_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001 - 没有桌面环境时打不开浏览器不算错
+            pass
+    uvicorn.run(create_app(RunManager()), host=HOST, port=port, log_level="info" if args.verbose else "warning")
+    return 0
 
 
 def _print_config(root: str | None) -> int:
@@ -80,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "config":
         return _print_config(args.root)
+    if args.command == "serve":
+        return _serve(args)
     root = Path(args.root).expanduser()
     if not root.is_dir():
         print(f"盘根目录不存在或不是目录：{root}", file=sys.stderr)
