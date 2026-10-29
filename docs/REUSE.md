@@ -45,3 +45,8 @@
 | `src/hidden_shelf/scrape/sources/fc2.py` | `src/peach/sources/fc2.py` | 去 fc2cmadb/FC2PPV-DB/JAVten 的说明，FC2 链只剩 fc2 → javarchive → javdb |
 | `src/hidden_shelf/scrape/sources/javarchive.py` | `src/peach/sources/javarchive.py` | `NotFound` 改从本项目模块导入 |
 | `tests/test_sources_fc2.py`、`tests/fixtures/sources/fc2-*.html`、`javarchive-*.html` | `tests/test_metadata_fc2.py`（`Fc2CodeTests`、`Fc2ShopPageTests`、`JavArchiveTests`） | 改 pytest 风格；页面落成 HTML 夹具，变体用字节替换 |
+| `src/hidden_shelf/migrations/0002_scrape.sql` | `migrations/0002_canonical_entities.sql`、`0032_entity_external_ref_multi_id.sql`（表结构） | 列名缩短（`metadata`、`synced_at`）；`entity_alias` 重建加 `source`/`confidence` |
+| `src/hidden_shelf/kanji.py` | `src/peach/kanji.py` | 照抄 |
+| `src/hidden_shelf/scrape/names.py` | `src/peach/metadata_alias_resolve.py`（`is_descriptive`、`stage_name`、`is_planning_alias`）、`src/peach/metadata.py`（`split_former_name`、`normalized_performers`） | 企划名义剪得出用艺名、剪不出整条丢弃并记 warning（无复核队列）；拉丁字母名不经企划名义判据 |
+| `src/hidden_shelf/entities.py`（`strip_zero_width`、`collapse_repeated_entity_name`、`resolve_performer` 的解析顺序） | `src/peach/entities.py`（同名两项、`upsert_asset_entity`、`resolve_entity`） | 去 creator、合并重定向与扁平投影；`strip_zero_width` 落在 `db.py` 供 `normalize_name` 用 |
+| `tests/test_names.py`、`tests/test_entities_scrape.py` | `tests/test_composite_name_split.py`、`test_performer_localization.py`（kanji 断言）、`test_entity_merge.py`（`collapse_repeated_entity_name`） | 改 pytest 风格 |

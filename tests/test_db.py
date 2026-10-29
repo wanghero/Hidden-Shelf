@@ -15,7 +15,7 @@ def test_connect_runs_migrations(tmp_root: Path):
     paths = ShelfPaths(tmp_root)
     connection = db.connect(paths)
     try:
-        assert db.schema_version(connection) == 1
+        assert db.schema_version(connection) == 2
         assert {"asset", "sidecar", "entity", "entity_alias", "asset_entity", "run",
                 "organize_batch", "schema_version"} <= _tables(connection)
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
@@ -40,9 +40,9 @@ def test_connect_is_idempotent(tmp_root: Path):
     first.close()
     second = db.connect(paths)
     try:
-        assert db.schema_version(second) == 1
+        assert db.schema_version(second) == 2
         assert second.execute("SELECT count(*) FROM entity").fetchone()[0] == 1
-        assert second.execute("SELECT count(*) FROM schema_version").fetchone()[0] == 1
+        assert second.execute("SELECT count(*) FROM schema_version").fetchone()[0] == 2
     finally:
         second.close()
 

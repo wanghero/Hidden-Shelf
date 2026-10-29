@@ -11,6 +11,9 @@ from .paths import ShelfPaths
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 #: 归一化时抹掉的字符：空白与全半角标点、符号。
 _STRIP = re.compile(r"[\s\W_]+", re.UNICODE)
+#: 规范名里要剥掉的零宽字符（取自 peach `entities.ZERO_WIDTH`）。上游译名夹带过 `‌斋藤亚美里`：页面上和普通名字
+#: 一模一样，但 `strip()` 不认它们不是空白，于是同一个人能存成两个实体。U+200D（ZWJ）不在名单里——emoji 靠它连字。
+ZERO_WIDTH = str.maketrans({"​": None, "‌": None, "⁠": None, "﻿": None})
 
 
 def connect(paths: ShelfPaths) -> sqlite3.Connection:
@@ -45,8 +48,12 @@ def migrate(connection: sqlite3.Connection) -> None:
         connection.commit()
 
 
+def strip_zero_width(name: str | None) -> str:
+    return str(name or "").translate(ZERO_WIDTH)
+
+
 def normalize_name(name: str) -> str:
-    """实体合并用的名字键：NFC、casefold、去空白与全半角标点。"""
-    text = unicodedata.normalize("NFKC", str(name or ""))
+    """实体合并用的名字键：去零宽字符、NFKC、casefold、去空白与全半角标点。"""
+    text = unicodedata.normalize("NFKC", strip_zero_width(name))
     text = _STRIP.sub("", text)
     return unicodedata.normalize("NFC", text.casefold())
