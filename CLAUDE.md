@@ -10,10 +10,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 当前阶段（2026-10-29）
 
-- 状态：**v0.3.5，计划 1「本地流水线」、计划 2「联网刮削」、计划 3「进度网页」全部完成**（三份计划每个任务单独提交）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`，命令行 `shelf run` 与进度网页 `shelf serve` 跑同一个 `pipeline.run`，输出一致；拔网线照样跑通。
+- 状态：**v0.3.9，计划 1「本地流水线」、计划 2「联网刮削」、计划 3「进度网页」、计划 4「盘根目录鼠标选择」全部完成**（四份计划每个任务单独提交）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`，命令行 `shelf run` 与进度网页 `shelf serve` 跑同一个 `pipeline.run`，输出一致；拔网线照样跑通。
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
-- 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`；计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`；计划 3：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`（三份都已完成）。
-- **下一步：计划 4「盘根目录鼠标选择」** `docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`（已批准，从 Task 1 开始；只改进度网页：加「浏览」按钮和目录选择弹窗，后端新增 `GET /api/browse`）。其他候选：跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
+- 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`；计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`；计划 3：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`；计划 4：`docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`（四份都已完成）。
+- 下一步没有已批准的计划。候选：跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
 - 计划 2 的真实来源冒烟（`scripts/smoke_sources.py`）在云端会话里**未做**（容器无出站外网），本机有网时按计划 2 Task 11 Step 2 的清单补跑。
 - 与计划的已知出入（以 peach 原函数实跑结果为准，不改规则）：`part_marker("ABP-758-cd1.mp4")` 返回 `"1"` 而不是 `"cd1"`；自定义正则抓到的段仍会归一化（`MYLABEL001` → `MYLABEL-001`）；`-C`（中字版）会被 peach 的 `_PART_MARKER` 当成分卷 `c`。计划 2 的出入：javdb 快照不带 peach 的 `javdb_rule`；企划名义剪不出艺名的整条丢弃（没有复核队列）；带敬称的写法（`木村さん`）按企划名义丢弃。
 - 参考克隆 `reference/peach`（`.gitignore` 排除，commit 见 `docs/REUSE.md`）；云端会话需要时重新 `git clone --depth 1 https://github.com/peach-mitao/peach.git reference/peach`。
@@ -35,7 +35,7 @@ uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbu
 uv run shelf serve [--port 8031] [--no-browser]   # 进度网页：只监听 127.0.0.1，默认口 8031 被占就在 8000–8099 内往后找
 ```
 
-验证进度网页：`shelf serve --no-browser` 跑在后台，Playwright 无头 Chromium 连 `http://127.0.0.1:<port>/`（脚本不进仓库，放 scratchpad）。
+验证进度网页：`shelf serve --no-browser` 跑在后台，Playwright 无头 Chromium 连 `http://127.0.0.1:<port>/`（脚本不进仓库，放 scratchpad）。验证目录选择器时用 `HIDDEN_SHELF_VOLUMES=<临时卷目录>` 起服务，让位置列出现造好的卷；容器里是 root，`chmod 000` 挡不住，「无权限」那一层用 Playwright 拦截 `/api/browse` 回 403（后端映射有单元测试）。
 
 环境要求：Python ≥ 3.12、uv、系统 ffmpeg/ffprobe（macOS `brew install ffmpeg`，云端 Linux `apt-get install -y ffmpeg`）、node ≥ 20（只为跑前端测试）。
 
@@ -45,7 +45,8 @@ uv run shelf serve [--port 8031] [--no-browser]   # 进度网页：只监听 127
 
 - 包 `src/hidden_shelf/`：
   - `pipeline.py` 串六步 `scan → import → scrape → organize（后自动再 scan） → media → build`，每步写 `run` 表与 `.shelf/logs/run-<时间>.log`；`scrape` 是唯一失败不中断后续的步，`config.scrape=false` 或 `--offline` 记 `skipped`。`Progress` 回调协议（`step/advance/log/done/failed/skipped`），`ConsoleProgress` 是命令行实现，`serve.events.EventProgress` 是网页实现；`run(..., cancel=)` 只在步与步之间检查取消，`RunResult.cancelled`。`cli.py` 是 argparse 入口（`shelf`）。
-  - 进度网页 `serve/`：`events.py`（`Event`、`RunLog` 环形缓冲 5000 条——`step.progress` 可淘汰、里程碑永不淘汰——订阅队列、按序号补发；`EventProgress`）、`runner.py`（`RunManager` 进程内单运行锁、守护线程跑 `pipeline.run`、`cancel()` 置标志、`reduce_state` 事件归约、`<home>/recent.json` 最近 10 个盘根）、`app.py`（FastAPI：`GET /`、`/static/*`、`/api/state`，`POST /api/run|cancel|open`，`GET /api/events` SSE；POST 同源防护：`X-Shelf-Request: 1` + `Origin`/`Referer` 主机是 127.0.0.1/localhost，否则 403）、`ports.py`（默认 8031、8000–8099 段、指定口被占报错）、`static/`（`progress-core.js` 纯逻辑 UMD 可 node 测、`progress.js` DOM 与 EventSource 客户端、`progress.css` 只用 token、`i18n.js` 自己的中英字典、`tokens.css`/`ripple.js` 来自 ux-standard）、`templates/progress.html.j2`。
+  - 进度网页 `serve/`：`events.py`（`Event`、`RunLog` 环形缓冲 5000 条——`step.progress` 可淘汰、里程碑永不淘汰——订阅队列、按序号补发；`EventProgress`）、`runner.py`（`RunManager` 进程内单运行锁、守护线程跑 `pipeline.run`、`cancel()` 置标志、`reduce_state` 事件归约、`<home>/recent.json` 最近 10 个盘根）、`browse.py`（目录选择器后端：`list_roots` 用户目录 + 各卷/挂载点/盘符，`list_directory` 只列目录、不跟符号链接、不列文件；`BrowseError.status` 400/403/404）、`app.py`（FastAPI：`GET /`、`/static/*`、`/api/state`、`/api/browse`，`POST /api/run|cancel|open`，`GET /api/events` SSE；同源防护：POST **和 `GET /api/browse`** 要 `X-Shelf-Request: 1` + `Origin`/`Referer` 主机是 127.0.0.1/localhost，否则 403）、`ports.py`（默认 8031、8000–8099 段、指定口被占报错）、`static/`（`progress-core.js` 纯逻辑 UMD 可 node 测，含选择器的 `breadcrumbs/sortEntries/browseUrl`、`progress.js` DOM、EventSource 客户端与目录选择弹窗、`progress.css` 只用 token、`i18n.js` 自己的中英字典、`tokens.css`/`ripple.js` 来自 ux-standard）、`templates/progress.html.j2`。
+  - 目录选择器的取舍：浏览器拿不到本机绝对路径，列目录全由后端做；`GET /api/browse?path=&show_hidden=0|1`，`path` 空回 `roots`，否则回 `{path, parent, entries[{name,path,has_shelf}], truncated, has_shelf, writable}`，响应 `no-store`；`..` 段拒绝、隐藏目录默认不显示、`.shelf` 与系统目录（`@eaDir`、`$RECYCLE.BIN`、`System Volume Information`、`.Spotlight-V100`、`.Trashes`、`.fseventsd`）永不显示但 `has_shelf` 告诉前端「已有库」；单项 stat 失败跳过那一项；最多 2000 条，超出 `truncated`。前端「选择此目录」选的是当前浏览到的目录（面包屑最后一段），运行中禁用；起点是输入框的值 → `localStorage` 的 `browse.last` → 用户目录。`HIDDEN_SHELF_VOLUMES` 环境变量只是手动验证用的只读钩子（把 macOS 风格的卷目录指到别处），不是配置项。
   - SSE 格式：每条 `id: <seq>`、`event: <kind>`、`data: <一行 JSON>`，JSON 键 `seq, ts, run, kind, step, level, message, stats`；`kind ∈ run.start | step.start | step.progress | step.done | step.failed | step.skipped | run.done | run.cancelled`；15 秒没事件发 `: ping`；客户端带 `Last-Event-ID` 重连从该序号之后补。`step.progress` 的 `message` 就是 `ConsoleProgress` 那一行去掉 `[步名]` 前缀的正文（`tests/test_serve_e2e.py` 钉住两边逐行一致）。
   - `rules/`（移植自 peach）：`codes.py` 番号识别、`sidecars.py` 附属文件判定、`nfo.py` NFO 读取与配对。`field_owners.py` 字段归属。`organize/templates.py` 归位模板。`media/frames.py`、`media/fingerprint.py` 抽帧与指纹。`kanji.py` 日本字形→简体表。登记表 `docs/REUSE.md`。
   - 自写：`paths.py`（`ShelfPaths`，`.shelf/` 布局）、`config.py`（`.shelf/config.json`）、`netconfig.py`（`~/.hidden-shelf/config.json`）、`db.py` + `migrations/*.sql`（当前版本 2）、`scan.py`、`local_import.py` + `entities.py`、`organize/plan.py` + `organize/apply.py`、`media/process.py` + `sheets.py` + `covers.py` + `ffmpeg.py`、`site/build.py` + `playability.py`、`site/static/*`、`site/templates/index.html.j2`。
