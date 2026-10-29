@@ -10,10 +10,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 当前阶段（2026-10-29）
 
-- 状态：**v0.2.11，计划 1「本地流水线」与计划 2「联网刮削」都已完成**（计划 2 Task 0–11 每个任务单独提交，版本 0.2.0 → 0.2.11）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`；拔网线照样跑通，`scrape` 一步失败只记本步不拦后续。
+- 状态：**v0.3.5，计划 1「本地流水线」、计划 2「联网刮削」、计划 3「进度网页」全部完成**（三份计划每个任务单独提交）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`，命令行 `shelf run` 与进度网页 `shelf serve` 跑同一个 `pipeline.run`，输出一致；拔网线照样跑通。
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
-- 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`（已完成）；实施计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`（已完成）。
-- 实施计划 3「进度网页」：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`（已写好，待批准后**从 Task 0 开始按任务顺序执行**，版本从 0.3.0 起到 0.3.5）。FastAPI + uvicorn 只监听 127.0.0.1（默认口 8031，8000–8099 段），`Progress` 协议翻成带序号的 SSE 事件，单运行、步间取消、同源防护；前端纯 HTML + 原生 JS 按 ux-standard。
+- 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`；计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`；计划 3：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`（三份都已完成）。
+- 下一步没有已批准的计划。候选：跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
 - 计划 2 的真实来源冒烟（`scripts/smoke_sources.py`）在云端会话里**未做**（容器无出站外网），本机有网时按计划 2 Task 11 Step 2 的清单补跑。
 - 与计划的已知出入（以 peach 原函数实跑结果为准，不改规则）：`part_marker("ABP-758-cd1.mp4")` 返回 `"1"` 而不是 `"cd1"`；自定义正则抓到的段仍会归一化（`MYLABEL001` → `MYLABEL-001`）；`-C`（中字版）会被 peach 的 `_PART_MARKER` 当成分卷 `c`。计划 2 的出入：javdb 快照不带 peach 的 `javdb_rule`；企划名义剪不出艺名的整条丢弃（没有复核队列）；带敬称的写法（`木村さん`）按企划名义丢弃。
 - 参考克隆 `reference/peach`（`.gitignore` 排除，commit 见 `docs/REUSE.md`）；云端会话需要时重新 `git clone --depth 1 https://github.com/peach-mitao/peach.git reference/peach`。
@@ -32,7 +32,10 @@ uv run shelf scrape <盘根目录> --force-scrape --sources r18dev,javdb --route
 uv run shelf config [<盘根目录>]          # 打印全局配置位置、代理模式、各站 Cookie 有无、该盘冷却状态（不打印 Cookie 值）
 uv run shelf run <盘根目录> --no-move-unrecognized --dir-template "{studio}/{code}" --file-template "{code}[-cd{cd}]" --language en
 uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbus,javdb   # 真实来源冒烟（手动，需外网）
+uv run shelf serve [--port 8031] [--no-browser]   # 进度网页：只监听 127.0.0.1，默认口 8031 被占就在 8000–8099 内往后找
 ```
+
+验证进度网页：`shelf serve --no-browser` 跑在后台，Playwright 无头 Chromium 连 `http://127.0.0.1:<port>/`（脚本不进仓库，放 scratchpad）。
 
 环境要求：Python ≥ 3.12、uv、系统 ffmpeg/ffprobe（macOS `brew install ffmpeg`，云端 Linux `apt-get install -y ffmpeg`）、node ≥ 20（只为跑前端测试）。
 
@@ -41,7 +44,9 @@ uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbu
 ## 架构（代码已落地，改动时保持同步）
 
 - 包 `src/hidden_shelf/`：
-  - `pipeline.py` 串六步 `scan → import → scrape → organize（后自动再 scan） → media → build`，每步写 `run` 表与 `.shelf/logs/run-<时间>.log`；`scrape` 是唯一失败不中断后续的步，`config.scrape=false` 或 `--offline` 记 `skipped`。`Progress` 回调协议，`ConsoleProgress` 是命令行实现，计划 3 做 SSE 版。`cli.py` 是 argparse 入口（`shelf`）。
+  - `pipeline.py` 串六步 `scan → import → scrape → organize（后自动再 scan） → media → build`，每步写 `run` 表与 `.shelf/logs/run-<时间>.log`；`scrape` 是唯一失败不中断后续的步，`config.scrape=false` 或 `--offline` 记 `skipped`。`Progress` 回调协议（`step/advance/log/done/failed/skipped`），`ConsoleProgress` 是命令行实现，`serve.events.EventProgress` 是网页实现；`run(..., cancel=)` 只在步与步之间检查取消，`RunResult.cancelled`。`cli.py` 是 argparse 入口（`shelf`）。
+  - 进度网页 `serve/`：`events.py`（`Event`、`RunLog` 环形缓冲 5000 条——`step.progress` 可淘汰、里程碑永不淘汰——订阅队列、按序号补发；`EventProgress`）、`runner.py`（`RunManager` 进程内单运行锁、守护线程跑 `pipeline.run`、`cancel()` 置标志、`reduce_state` 事件归约、`<home>/recent.json` 最近 10 个盘根）、`app.py`（FastAPI：`GET /`、`/static/*`、`/api/state`，`POST /api/run|cancel|open`，`GET /api/events` SSE；POST 同源防护：`X-Shelf-Request: 1` + `Origin`/`Referer` 主机是 127.0.0.1/localhost，否则 403）、`ports.py`（默认 8031、8000–8099 段、指定口被占报错）、`static/`（`progress-core.js` 纯逻辑 UMD 可 node 测、`progress.js` DOM 与 EventSource 客户端、`progress.css` 只用 token、`i18n.js` 自己的中英字典、`tokens.css`/`ripple.js` 来自 ux-standard）、`templates/progress.html.j2`。
+  - SSE 格式：每条 `id: <seq>`、`event: <kind>`、`data: <一行 JSON>`，JSON 键 `seq, ts, run, kind, step, level, message, stats`；`kind ∈ run.start | step.start | step.progress | step.done | step.failed | step.skipped | run.done | run.cancelled`；15 秒没事件发 `: ping`；客户端带 `Last-Event-ID` 重连从该序号之后补。`step.progress` 的 `message` 就是 `ConsoleProgress` 那一行去掉 `[步名]` 前缀的正文（`tests/test_serve_e2e.py` 钉住两边逐行一致）。
   - `rules/`（移植自 peach）：`codes.py` 番号识别、`sidecars.py` 附属文件判定、`nfo.py` NFO 读取与配对。`field_owners.py` 字段归属。`organize/templates.py` 归位模板。`media/frames.py`、`media/fingerprint.py` 抽帧与指纹。`kanji.py` 日本字形→简体表。登记表 `docs/REUSE.md`。
   - 自写：`paths.py`（`ShelfPaths`，`.shelf/` 布局）、`config.py`（`.shelf/config.json`）、`netconfig.py`（`~/.hidden-shelf/config.json`）、`db.py` + `migrations/*.sql`（当前版本 2）、`scan.py`、`local_import.py` + `entities.py`、`organize/plan.py` + `organize/apply.py`、`media/process.py` + `sheets.py` + `covers.py` + `ffmpeg.py`、`site/build.py` + `playability.py`、`site/static/*`、`site/templates/index.html.j2`。
   - 刮削 `scrape/`：`transport.py`（有界读取、重定向规则、`HostLimiter`）、`access.py`（8 站登记 `SOURCES`、按站 `Cooldown`、`SourceTransport`：Cookie/限速/预算/403-429 冷却）、`snapshots.py`（原始快照与「没有」，7 天）、`identity.py`（`identifies_code`）、`routes.py`（番号形状 → 内容类型 → 来源链；**每站各是一档、逐家短路**）、`policy.py`（来源分级、字段顺序、`owner_tier`）、`names.py`（艺名清洗）、`settle.py`（结算）、`apply.py`（落库、`should_scrape`）、`covers.py`（候选拼法、量尺寸择优、落盘）、`avatars.py`（官方头像）、`run.py`（编排 `scrape_assets`）、`sources/`（契约 `base.py` + 8 站解析器：`r18dev`、`dmm`、`onepondo`、`fc2`、`javarchive`、`javdb`、`javbus`、`avbase`，全部登记在 `SITE_SOURCES`）。
@@ -55,7 +60,8 @@ uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbu
 - `field_owners`：每条记录有字段归属 JSON；`user:*`、`review:*` 的字段自动写入不许改；扫描写番号用 `scan:filename` + `require_empty`；联网来源写 `auto:<来源名>`。用户手改入口是 `.shelf/overrides.json`（`{"番号": {"title", "studio", "performers": [...], "tags": [...]}}`）。封面归属优先级：`auto:local`（本地旧封面）> 联网 `auto:<来源>` > `auto:frame`（抽帧兜底）。
 - 静态站从 `file://` 打开：数据只能是 `<script src>` 加载的 `.js`（`window.__shelf.{meta,works,entities,unrecognized}`，`works` 超 5 MB 分片成 `works-N.js`，`meta.dataFiles` 列全），不能 `fetch`；视频、图片相对路径，**不预先 URL 编码**，前端 `encodeMediaPath` 逐段编码；不加载外网资源（出处链接 `works[].sources` 是 `target=_blank` 外链，不是资源加载）。`entities.performers[].avatar` 指向 `.shelf/avatars/<id>.jpg`。前端是 hash 路由单页（`app.js`），纯逻辑在 `shelf-core.js`（UMD，node 可测）。
 - 前端外观按 `docs/ux-standard/SKILL.md`（`tokens.css` + `ripple.js` 复制到 `site/static/`），`app.css` 只用 token 变量（`grep -nE "#[0-9a-fA-F]{3,6}\b|rgb\(" app.css` 应无输出），浅/深/系统主题，中英双语（`i18n.js` 两套 key 必须一致）。
-- 测试永不联网：`tests/conftest.py` 的 autouse `isolated_home` 把全局配置落到临时目录并停用 8 站；要联网行为的测试自己传 `GlobalConfig()` 与假传输（`tests/test_scrape_run.py` 的 `replay`）。
+- 测试永不联网：`tests/conftest.py` 的 autouse `isolated_home` 把全局配置落到临时目录并停用 8 站；要联网行为的测试自己传 `GlobalConfig()` 与假传输（`tests/test_scrape_run.py` 的 `replay`）。进度网页的测试用 `fastapi.testclient` 与 `tests/serve_fakes.py` 的假流水线；`TestClient` 提前关 SSE 流要等生成器下一次 yield，所以测试里 `ping_seconds` 设得很短。
+- 进度网页的取舍：进程内单运行，不做跨进程锁（网页与命令行同时跑同一盘不保护）；取消粒度是「步」；只有 `media` 等带 `[i/total]` 前缀的消息给得出百分比，其余步运行中显示条纹；无桌面环境 `webbrowser.open` 静默失败，`--no-browser` 可绕过。
 
 ## 约定
 
@@ -65,4 +71,4 @@ uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbu
 
 ## 端口约束
 
-- 本项目计划 1、2 不开端口。计划 3 的进度网页 `shelf serve` 暂定默认口 **8031**（8000–8099 段，只监听 127.0.0.1，被占时在段内往后找）；本机实施时先 `cat ~/.claude/ports.md`（仅本机），若 8031 已被别的项目登记就换一个空闲口，分配后写回 ports.md 并更新本节与 `serve/ports.py` 的 `DEFAULT_PORT`。
+- 进度网页 `shelf serve` 默认口 **8031**（`serve/ports.py` 的 `DEFAULT_PORT`；8000–8099 段，只监听 127.0.0.1，被占时在段内往后找，`--port` 指定的口被占则退出码 2）。本机第一次跑之前 `cat ~/.claude/ports.md`（仅本机），若 8031 已被别的项目登记就换一个空闲口，写回 ports.md 并同步改本节与 `DEFAULT_PORT`。其余命令不开端口。

@@ -379,9 +379,10 @@
     clear(refs.headSub);
     refs.headSub.appendChild(h('span', { class: 'dot ' + headDot, 'aria-hidden': 'true' }));
     refs.headSub.appendChild(h('span', { text: t(headKey) + (state.root ? ' · ' + state.root : '') }));
-    // 表单
+    // 表单：刷新页面后把正在跑／上次跑的盘根目录填回去（用户自己改过的不动）。
     clear(refs.recent);
     recentRoots.forEach(function (root) { refs.recent.appendChild(h('option', { value: root })); });
+    if (!refs.rootValue && !refs.root.value) refs.root.value = state.root || recentRoots[0] || '';
     var busy = state.running || starting;
     [refs.root, refs.move, refs.offline, refs.force].forEach(function (input) { input.disabled = busy; });
     refs.moveValue = refs.move.checked; refs.offlineValue = refs.offline.checked; refs.forceValue = refs.force.checked;

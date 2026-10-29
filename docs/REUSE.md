@@ -56,3 +56,4 @@
 | `src/hidden_shelf/scrape/avatars.py` | `src/peach/sources/r18dev.py`（`ACTRESS_IMAGE` 的用法） | 自写：只下不量尺寸，404 从元数据拿掉 |
 | `src/hidden_shelf/scrape/run.py` | `src/peach/library_processing.py`（`_query` 的按档问、`settles` 短路、快照与「没有」记录） | 自写编排：每站各一档逐家短路；无复核队列；网络不可用提前返回 |
 | `scripts/smoke_sources.py` | — | 自写 |
+| `src/hidden_shelf/serve/*`（计划 3 进度网页） | — | 全部自写；`serve/static/tokens.css`、`ripple.js` 复制自 `docs/ux-standard/`（用户自己的 UX 规范，非 peach） |
