@@ -118,3 +118,39 @@ test('zh and en dictionaries share the same keys', () => {
   assert.deepEqual(Object.keys(dict.zh).sort(), Object.keys(dict.en).sort());
   assert.ok(Object.keys(dict.zh).length > 50);
 });
+
+test('breadcrumbs splits POSIX and Windows paths into clickable segments', () => {
+  assert.deepEqual(core.breadcrumbs('/Volumes/我的盘/30、下载'), [
+    { name: '/', path: '/' },
+    { name: 'Volumes', path: '/Volumes' },
+    { name: '我的盘', path: '/Volumes/我的盘' },
+    { name: '30、下载', path: '/Volumes/我的盘/30、下载' },
+  ]);
+  assert.deepEqual(core.breadcrumbs('/'), [{ name: '/', path: '/' }]);
+  assert.deepEqual(core.breadcrumbs('/a/'), [{ name: '/', path: '/' }, { name: 'a', path: '/a' }], '尾部斜杠忽略');
+  assert.deepEqual(core.breadcrumbs('D:\\a\\b'), [
+    { name: 'D:\\', path: 'D:\\' },
+    { name: 'a', path: 'D:\\a' },
+    { name: 'b', path: 'D:\\a\\b' },
+  ]);
+  assert.deepEqual(core.breadcrumbs('D:\\'), [{ name: 'D:\\', path: 'D:\\' }]);
+  assert.deepEqual(core.breadcrumbs(''), []);
+  assert.deepEqual(core.breadcrumbs(null), []);
+});
+
+test('sortEntries is numeric-aware and case-insensitive, and does not mutate', () => {
+  const entries = ['10', '2', 'b', 'A'].map((name) => ({ name, path: '/' + name, has_shelf: false }));
+  const sorted = core.sortEntries(entries);
+  assert.deepEqual(sorted.map((e) => e.name), ['2', '10', 'A', 'b']);
+  assert.deepEqual(entries.map((e) => e.name), ['10', '2', 'b', 'A'], '原数组不动');
+  assert.deepEqual(core.sortEntries(null), []);
+});
+
+test('browseUrl encodes the path and omits it when empty', () => {
+  assert.equal(core.browseUrl('/Volumes/我的盘/30、下载 #1', false),
+    '/api/browse?path=' + encodeURIComponent('/Volumes/我的盘/30、下载 #1'));
+  assert.ok(core.browseUrl('/a b#c', false).indexOf('%23') > 0, '# 必须编码');
+  assert.equal(core.browseUrl('/a', true), '/api/browse?path=%2Fa&show_hidden=1');
+  assert.equal(core.browseUrl('', false), '/api/browse');
+  assert.equal(core.browseUrl(null, true), '/api/browse?show_hidden=1');
+});

@@ -68,7 +68,12 @@
     external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>',
     down: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
     loader: '<path d="M21 12a9 9 0 1 1-6.22-8.56"/>',
-    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+    folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',
+    drive: '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/>',
+    home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+    up: '<polyline points="14 9 9 4 4 9"/><path d="M20 20h-7a4 4 0 0 1-4-4V4"/>',
+    chevron: '<path d="m9 18 6-6-6-6"/>'
   };
   function icon(name) {
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -234,6 +239,188 @@
     if (!sticky) setTimeout(function () { if (item.parentNode) item.parentNode.removeChild(item); }, TOAST_MS);
   }
 
+  /* ---------- 目录选择弹窗 ----------
+   * 列目录由后端 /api/browse 做（浏览器拿不到本机绝对路径）。「选择此目录」选的是当前浏览到的目录（面包屑最后一段）。
+   * 壳只在打开与换语言时建一次（buildPicker），导航只刷新面包屑、位置、列表与脚部（updatePicker）。 */
+  var picker = { open: false, path: null, listing: null, roots: [], loading: false, error: null, selected: null,
+    showHidden: readPref('browse.hidden') === '1', host: null, trigger: null, refs: null, token: 0 };
+
+  function browseErrorText(response) {
+    if (response.status === 403) return t('browse.error.403');
+    if (response.status === 404) return t('browse.error.404');
+    return t('browse.error.generic', { error: (response.data && response.data.error) || response.status });
+  }
+  function browseFailure(error) { return t('browse.error.generic', { error: String(error && error.message || error) }); }
+
+  function openPicker(trigger) {
+    if (picker.open) return;
+    picker.open = true; picker.trigger = trigger || null; picker.loading = true; picker.error = null; picker.listing = null; picker.selected = null;
+    picker.host = h('div', { class: 'dialog-backdrop', onclick: function (e) { if (e.target === picker.host) closePicker(); } });
+    document.body.appendChild(picker.host);
+    document.documentElement.classList.add('dialog-open');
+    buildPicker();
+    var token = ++picker.token;
+    api('GET', core.browseUrl(null, false)).then(function (response) {
+      if (token !== picker.token) return;
+      picker.roots = response.ok ? (response.data.roots || []) : [];
+      // 起点：输入框的值 → 上次选的 → 用户目录；前一个打不开就试下一个，全失败就停在第一个并显示它的错。
+      var candidates = [refs.root.value.trim(), readPref('browse.last'), picker.roots.length ? picker.roots[0].path : null]
+        .filter(function (p, i, all) { return p && all.indexOf(p) === i; });
+      return tryCandidates(candidates, 0, null, token);
+    }).catch(function (error) { if (token !== picker.token) return; picker.loading = false; picker.error = browseFailure(error); updatePicker(); });
+  }
+  function tryCandidates(candidates, index, firstFailure, token) {
+    if (index >= candidates.length) {
+      picker.loading = false;
+      if (firstFailure) { picker.path = firstFailure.path; picker.error = firstFailure.error; }
+      updatePicker();
+      return null;
+    }
+    var path = candidates[index];
+    return api('GET', core.browseUrl(path, picker.showHidden)).then(function (response) {
+      if (token !== picker.token) return null;
+      if (response.ok) { picker.loading = false; picker.path = path; picker.listing = response.data; picker.error = null; updatePicker(); return null; }
+      return tryCandidates(candidates, index + 1, firstFailure || { path: path, error: browseErrorText(response) }, token);
+    });
+  }
+  function navigate(path) {
+    var token = ++picker.token;
+    picker.loading = true; picker.error = null; picker.selected = null; picker.path = path;
+    updatePicker();
+    api('GET', core.browseUrl(path, picker.showHidden)).then(function (response) {
+      if (token !== picker.token) return;
+      picker.loading = false;
+      if (response.ok) { picker.listing = response.data; picker.error = null; }
+      else { picker.listing = null; picker.error = browseErrorText(response); }
+      updatePicker();
+      // 焦点落在被重绘掉的元素上（列表项、面包屑）就挪到新列表；在开关、按钮上就不动。
+      var active = document.activeElement;
+      if (!active || active === document.body || !picker.refs.dialog.contains(active)) focusList();
+    }).catch(function (error) { if (token !== picker.token) return; picker.loading = false; picker.listing = null; picker.error = browseFailure(error); updatePicker(); });
+  }
+  function closePicker() {
+    if (!picker.open) return;
+    picker.open = false; picker.token++;
+    if (picker.host && picker.host.parentNode) picker.host.parentNode.removeChild(picker.host);
+    picker.host = null; picker.refs = null;
+    document.documentElement.classList.remove('dialog-open');
+    var trigger = picker.trigger || refs.browseButton;
+    if (trigger && trigger.focus) trigger.focus();
+  }
+  function choosePicked() {
+    if (state.running || picker.loading || picker.error || !picker.path) return;
+    refs.root.value = picker.path;
+    refs.root.dispatchEvent(new Event('input', { bubbles: true }));
+    writePref('browse.last', picker.path);
+    closePicker();
+  }
+  function parentOfCurrent() {
+    if (picker.listing) return picker.listing.parent || null;
+    var crumbs = core.breadcrumbs(picker.path);
+    return crumbs.length > 1 ? crumbs[crumbs.length - 2].path : null;
+  }
+  function selectEntry(path) {
+    picker.selected = path;
+    var items = picker.refs ? picker.refs.listWrap.querySelectorAll('.browse-item') : [];
+    for (var i = 0; i < items.length; i++) items[i].setAttribute('aria-selected', items[i].getAttribute('data-path') === path ? 'true' : 'false');
+  }
+  function focusList() {
+    var p = picker.refs; if (!p) return;
+    var first = p.listWrap.querySelector('.browse-item');
+    (first || p.dialog).focus();
+  }
+  function listKeydown(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    var items = Array.prototype.slice.call(picker.refs.listWrap.querySelectorAll('.browse-item'));
+    if (!items.length) return;
+    e.preventDefault();
+    var index = items.indexOf(document.activeElement);
+    var next = index === -1 ? (e.key === 'ArrowDown' ? 0 : items.length - 1) : (e.key === 'ArrowDown' ? Math.min(items.length - 1, index + 1) : Math.max(0, index - 1));
+    items[next].focus();
+    selectEntry(items[next].getAttribute('data-path'));
+  }
+  function trapTab(e) {
+    if (e.key !== 'Tab' || !picker.refs) return;
+    var focusable = picker.refs.dialog.querySelectorAll('button:not(:disabled), input:not(:disabled)');
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === picker.refs.dialog)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  function buildPicker() {
+    if (!picker.host) return;
+    clear(picker.host);
+    var p = {};
+    picker.refs = p;
+    p.crumbs = h('nav', { class: 'crumbs', 'aria-label': t('browse.title') });
+    p.locations = h('div', { class: 'browse-locations' });
+    p.listWrap = h('div', { class: 'browse-list-wrap', onkeydown: listKeydown });
+    p.hidden = h('input', { type: 'checkbox', onchange: function () { picker.showHidden = p.hidden.checked; writePref('browse.hidden', p.hidden.checked ? '1' : null); if (picker.path) navigate(picker.path); } });
+    p.hidden.checked = picker.showHidden;
+    p.up = h('button', { class: 'button secondary small', type: 'button', 'data-ripple': true, onclick: function () { var parent = parentOfCurrent(); if (parent) navigate(parent); } }, icon('up'), h('span', { text: t('browse.up') }));
+    p.note = h('span', { class: 'browse-note', 'aria-live': 'polite' });
+    p.choose = h('button', { class: 'button', type: 'button', 'data-ripple': true, onclick: choosePicked }, icon('check'), h('span', { text: t('browse.choose') }));
+    p.dialog = h('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'browse-title', tabindex: '-1', onkeydown: trapTab },
+      h('div', { class: 'dialog-head' }, h('h2', { class: 'dialog-title', id: 'browse-title', text: t('browse.title') }),
+        h('button', { class: 'icon-button', type: 'button', 'data-ripple': true, 'aria-label': t('browse.close'), onclick: closePicker }, icon('x'))),
+      p.crumbs,
+      h('div', { class: 'browse-body' }, h('div', { class: 'browse-side' }, h('div', { class: 'browse-locations-title', text: t('browse.locations') }), p.locations), p.listWrap),
+      h('div', { class: 'dialog-foot' },
+        h('label', { class: 'switch compact' }, p.hidden, h('span', { class: 'track', 'aria-hidden': 'true' }), h('span', { text: t('browse.hidden') })),
+        p.up, p.note, h('span', { class: 'spacer' }),
+        h('button', { class: 'button secondary', type: 'button', 'data-ripple': true, onclick: closePicker }, t('browse.cancel')), p.choose));
+    picker.host.appendChild(p.dialog);
+    updatePicker();
+    p.dialog.focus();
+  }
+
+  function updatePicker() {
+    var p = picker.refs; if (!p) return;
+    clear(p.crumbs);
+    var crumbs = core.breadcrumbs(picker.path);
+    crumbs.forEach(function (crumb, i) {
+      if (i) p.crumbs.appendChild(h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, icon('chevron')));
+      var last = i === crumbs.length - 1;
+      p.crumbs.appendChild(h('button', { class: 'crumb', type: 'button', 'data-ripple': !last, title: crumb.path, 'aria-current': last ? 'location' : null, onclick: function () { if (!last) navigate(crumb.path); } }, crumb.name));
+    });
+    clear(p.locations);
+    picker.roots.forEach(function (root, i) {
+      var on = picker.path === root.path;
+      p.locations.appendChild(h('button', { class: 'browse-location' + (on ? ' on' : ''), type: 'button', 'data-ripple': true, title: root.path, 'aria-pressed': on ? 'true' : 'false', onclick: function () { navigate(root.path); } },
+        icon(i === 0 ? 'home' : 'drive'), h('span', { class: 'name', text: root.name }), root.has_shelf ? h('span', { class: 'badge', text: t('browse.has_shelf') }) : null));
+    });
+    clear(p.listWrap);
+    if (picker.loading) {
+      p.listWrap.appendChild(h('div', { class: 'skeleton-lines', 'aria-busy': 'true', 'aria-label': t('browse.loading') }, [60, 45, 70, 50, 65].map(function (w) { var s = h('div', { class: 'skeleton' }); s.style.width = w + '%'; return s; })));
+    } else if (picker.error) {
+      p.listWrap.appendChild(h('div', { class: 'state compact', role: 'alert' }, h('div', { class: 'state-icon danger' }, icon('alert')), h('h3', { class: 'state-title', text: picker.error })));
+    } else if (!picker.listing || !picker.listing.entries.length) {
+      p.listWrap.appendChild(h('div', { class: 'state compact' }, h('div', { class: 'state-icon' }, icon('folder')), h('h3', { class: 'state-title', text: t('browse.empty') })));
+    } else {
+      // 子目录可能上千条：一次 DocumentFragment 追加。
+      var list = h('div', { class: 'browse-list', role: 'listbox', 'aria-label': picker.path });
+      var fragment = document.createDocumentFragment();
+      core.sortEntries(picker.listing.entries).forEach(function (entry) {
+        fragment.appendChild(h('button', { class: 'browse-item', type: 'button', role: 'option', 'data-ripple': true, 'data-path': entry.path, title: entry.path, 'aria-selected': picker.selected === entry.path ? 'true' : 'false',
+          onclick: function () { selectEntry(entry.path); }, ondblclick: function () { navigate(entry.path); },
+          onkeydown: function (e) { if (e.key === 'Enter') { e.preventDefault(); navigate(entry.path); } } },
+          icon('folder'), h('span', { class: 'name', text: entry.name }), entry.has_shelf ? h('span', { class: 'badge', text: t('browse.has_shelf') }) : null));
+      });
+      list.appendChild(fragment);
+      p.listWrap.appendChild(list);
+    }
+    p.note.textContent = picker.listing && picker.listing.truncated ? t('browse.truncated', { n: picker.listing.entries.length }) : '';
+    p.up.disabled = picker.loading || !parentOfCurrent();
+    updatePickerButtons();
+  }
+  /** 运行状态变化时只刷新按钮（update() 每秒调用，不重绘列表）。 */
+  function updatePickerButtons() {
+    var p = picker.refs; if (!p) return;
+    p.choose.disabled = state.running || picker.loading || !!picker.error || !picker.path;
+    p.choose.title = state.running ? t('browse.running') : '';
+  }
+
   /* ---------- 渲染：外壳一次，局部更新 ---------- */
   function buildShell() {
     var app = document.getElementById('app');
@@ -255,6 +442,7 @@
     page.appendChild(refs.toasts);
     app.appendChild(h('main', { class: 'content' }, page));
     renderLogLines();
+    if (picker.open) buildPicker();
   }
 
   function renderSidebar() {
@@ -284,6 +472,8 @@
     refs.root = h('input', { class: 'input mono', id: 'root', type: 'text', list: 'recent-roots', placeholder: t('form.root.placeholder'), autocomplete: 'off', spellcheck: 'false',
       value: refs.rootValue || state.root || recentRoots[0] || '', onkeydown: function (e) { if (e.key === 'Enter' && !state.running) { e.preventDefault(); start(); } }, oninput: function () { refs.rootValue = refs.root.value; showFieldError(''); } });
     refs.rootError = h('p', { class: 'field-error', hidden: true, role: 'alert' });
+    refs.browseButton = h('button', { class: 'icon-button bordered', type: 'button', 'data-ripple': true, 'aria-label': t('browse.open'), title: t('browse.open'), 'aria-haspopup': 'dialog',
+      onclick: function () { openPicker(refs.browseButton); } }, icon('folder'));
     function toggle(key, labelKey, checked) {
       var input = h('input', { type: 'checkbox' });
       input.checked = checked;
@@ -295,7 +485,7 @@
     refs.formNote = h('span', { class: 'form-note tabular' });
     return h('section', { class: 'card' },
       h('div', { class: 'card-head' }, h('div', null, h('h2', { class: 'card-title', text: t('form.title') }), h('p', { class: 'card-sub', text: t('form.sub') }))),
-      h('div', { class: 'field' }, h('label', { class: 'label', for: 'root', text: t('form.root') }), refs.root, list, refs.rootError, h('p', { class: 'help', text: t('form.root.help') })),
+      h('div', { class: 'field' }, h('label', { class: 'label', for: 'root', text: t('form.root') }), h('div', { class: 'input-row' }, refs.root, refs.browseButton), list, refs.rootError, h('p', { class: 'help', text: t('form.root.help') })),
       h('div', { class: 'switches' },
         toggle('move', 'form.move', refs.moveValue == null ? true : refs.moveValue),
         toggle('offline', 'form.offline', !!refs.offlineValue),
@@ -396,6 +586,7 @@
     refs.formNote.textContent = state.running ? (state.cancelRequested ? t('form.stopping') : t('form.stop.help') + ' · ' + t('form.elapsed', { time: elapsedOf(state.startedAt) })) : (state.startedAt ? t('form.elapsed', { time: elapsedOf(state.startedAt, state.finishedAt) }) : '');
     var finishedOk = !state.running && state.result && state.result.ok && state.steps.build && state.steps.build.status === 'done';
     refs.openButton.hidden = !finishedOk;
+    updatePickerButtons();
     // 步骤
     STEPS.forEach(function (name) {
       var row = refs.steps[name];
@@ -452,6 +643,10 @@
   load();
   setInterval(function () { if (state.running && refs.root) update(); }, 1000);
   document.addEventListener('click', function () { if (themeMenuOpen) { themeMenuOpen = false; buildShell(); update(); } });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && (themeMenuOpen || drawerOpen)) { themeMenuOpen = false; drawerOpen = false; buildShell(); update(); } });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (picker.open) { closePicker(); return; }
+    if (themeMenuOpen || drawerOpen) { themeMenuOpen = false; drawerOpen = false; buildShell(); update(); }
+  });
   if (window.initRipple) window.initRipple();
 })();

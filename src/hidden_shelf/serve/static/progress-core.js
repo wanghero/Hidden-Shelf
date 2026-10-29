@@ -125,6 +125,52 @@
     return t(key, vars).replace(/\{[a-z_]+\}/g, '0');
   }
 
+  /* ---------- 目录选择器 ---------- */
+  var WIN_DRIVE = /^[A-Za-z]:\\/;
+
+  /** 绝对路径 → 面包屑段 `[{name, path}]`。POSIX 第一段是 `/`；Windows 第一段是盘符 `D:\`。空给 `[]`。 */
+  function breadcrumbs(path) {
+    var text = String(path == null ? '' : path);
+    if (!text) return [];
+    var crumbs = [];
+    if (WIN_DRIVE.test(text)) {
+      var drive = text.slice(0, 3);
+      crumbs.push({ name: drive, path: drive });
+      var current = drive;
+      text.slice(3).split(/[\\/]/).forEach(function (part) {
+        if (!part) return;
+        current = current === drive ? drive + part : current + '\\' + part;
+        crumbs.push({ name: part, path: current });
+      });
+      return crumbs;
+    }
+    if (text.charAt(0) !== '/') return [{ name: text, path: text }];
+    crumbs.push({ name: '/', path: '/' });
+    var acc = '';
+    text.split('/').forEach(function (part) {
+      if (!part) return;
+      acc += '/' + part;
+      crumbs.push({ name: part, path: acc });
+    });
+    return crumbs;
+  }
+
+  /** 按名字排序（数字感知、不分大小写），返回新数组。 */
+  function sortEntries(entries) {
+    return (entries || []).slice().sort(function (a, b) {
+      return String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  /** `/api/browse` 的查询串：path 空就不带 `path=`。 */
+  function browseUrl(path, showHidden) {
+    var query = [];
+    if (path) query.push('path=' + encodeURIComponent(String(path)));
+    if (showHidden) query.push('show_hidden=1');
+    return '/api/browse' + (query.length ? '?' + query.join('&') : '');
+  }
+
   return { STATUS: STATUS, initialState: initialState, reduce: reduce, reduceAll: reduceAll, percentOf: percentOf,
-    formatElapsed: formatElapsed, filterLog: filterLog, summaryOf: summaryOf };
+    formatElapsed: formatElapsed, filterLog: filterLog, summaryOf: summaryOf,
+    breadcrumbs: breadcrumbs, sortEntries: sortEntries, browseUrl: browseUrl };
 });

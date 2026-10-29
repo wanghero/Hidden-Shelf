@@ -78,7 +78,23 @@
     'result.failed': '流水线在「{step}」停下：{error}',
     'result.cancelled': '按你的要求停下了，已跑完的步骤结果已保存',
     'result.open': '打开成品',
-    'result.log': '日志文件：{path}'
+    'result.log': '日志文件：{path}',
+    'browse.open': '浏览目录',
+    'browse.title': '选择盘根目录',
+    'browse.close': '关闭',
+    'browse.locations': '位置',
+    'browse.up': '上一级',
+    'browse.choose': '选择此目录',
+    'browse.cancel': '取消',
+    'browse.hidden': '显示隐藏目录',
+    'browse.empty': '没有子目录',
+    'browse.loading': '加载中…',
+    'browse.truncated': '只显示前 {n} 个',
+    'browse.has_shelf': '已有库',
+    'browse.running': '运行中不能更换',
+    'browse.error.403': '没有读取权限',
+    'browse.error.404': '目录不存在',
+    'browse.error.generic': '读不了这个目录：{error}'
   };
   var en = {
     'app.name': 'Hidden Shelf',
@@ -155,7 +171,23 @@
     'result.failed': 'The pipeline stopped at "{step}": {error}',
     'result.cancelled': 'Stopped as requested; finished steps are saved',
     'result.open': 'Open result',
-    'result.log': 'Log file: {path}'
+    'result.log': 'Log file: {path}',
+    'browse.open': 'Browse folders',
+    'browse.title': 'Choose the disk root',
+    'browse.close': 'Close',
+    'browse.locations': 'Locations',
+    'browse.up': 'Up',
+    'browse.choose': 'Choose this folder',
+    'browse.cancel': 'Cancel',
+    'browse.hidden': 'Show hidden folders',
+    'browse.empty': 'No subfolders',
+    'browse.loading': 'Loading…',
+    'browse.truncated': 'Showing the first {n} only',
+    'browse.has_shelf': 'Has library',
+    'browse.running': 'Cannot change while a run is in progress',
+    'browse.error.403': 'No permission to read this folder',
+    'browse.error.404': 'Folder does not exist',
+    'browse.error.generic': 'Cannot read this folder: {error}'
   };
   return { zh: zh, en: en };
 });
