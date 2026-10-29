@@ -32,3 +32,7 @@
 | `src/hidden_shelf/scrape/routes.py` | `src/peach/metadata_routes.py` | 只留 8 站；每站各成一档（综合索引三家逐家短路，用户决定）；去 amane 桥与未接站 |
 | `src/hidden_shelf/scrape/policy.py` | `src/peach/metadata_policy.py` | 只登记 8 站；`LOCAL_NFO_SOURCE` 改 `nfo`；新增 `owner_tier` 把 `field_owners` 归属折成层级 |
 | `tests/test_routes.py`、`tests/test_policy.py` | `tests/test_metadata_routes.py`、`tests/test_metadata_policy.py` | 改 pytest 风格，期望按裁剪后的表改 |
+| `src/hidden_shelf/scrape/sources/r18dev.py` | `src/peach/sources/r18dev.py` | `Unavailable`、`identifies_code` 改从本项目模块导入；去封面层另一条路的说明 |
+| `src/hidden_shelf/scrape/sources/dmm.py` | `src/peach/sources/dmm.py` | 导入改本项目模块；GraphQL 操作名改 `Shelf*`；去 ADR 引用 |
+| `src/hidden_shelf/scrape/sources/onepondo.py` | `src/peach/sources/onepondo.py` | 导入改本项目模块 |
+| `tests/test_sources_official.py`、`tests/fixtures/sources/*.json` | `tests/test_metadata_r18dev.py`、`test_metadata_dmm.py`、`test_metadata_1pondo.py` | 改 pytest 风格；夹具从测试常量落成 JSON 文件；去 `LibraryMetadataProvider` 那一层 |
