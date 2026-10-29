@@ -23,3 +23,6 @@
 | `src/hidden_shelf/fsutil.py` | `src/peach/fsutil.py` | 去 Windows 占用重试与权限位 |
 | `src/hidden_shelf/scrape/transport.py` | `src/peach/http.py`（`HttpRequest`/`HttpResponse`、有界读取）、`scripting.HostLimiter`、`user_agent.py`、`jav_cover_fetch._fetch`、`scraping_access.SourceTransport`（重定向规则） | 去内网判据、浏览器传输、流量计费；`curl_cffi` 改为可选 |
 | `src/hidden_shelf/netconfig.py` | `src/peach/peach_proxy.py`（三选一语义与地址校验） | 改为一个 JSON 文件；加各站 Cookie/开关与路由覆盖 |
+| `src/hidden_shelf/scrape/sources/base.py` | `src/peach/sources/base.py` | `Session` 改调本项目 `transport.fetch`；去 `provider_error`；加 `MISS_REASONS`、`is_miss`、`retryable` |
+| `src/hidden_shelf/scrape/identity.py` | `src/peach/metadata.py`（`validate_provider_code`、`identifies_code`） | 照抄（含 mgstage URL 分支，纯函数无害） |
+| `tests/test_identity.py`、`tests/test_sources_contract.py` | `tests/test_metadata.py`（`SourceIdentityTests`）、`tests/test_metadata_sources.py`（`ContractTests`、`FailureReasonTests`） | 改 pytest 风格 |
