@@ -26,3 +26,6 @@
 | `src/hidden_shelf/scrape/sources/base.py` | `src/peach/sources/base.py` | `Session` 改调本项目 `transport.fetch`；去 `provider_error`；加 `MISS_REASONS`、`is_miss`、`retryable` |
 | `src/hidden_shelf/scrape/identity.py` | `src/peach/metadata.py`（`validate_provider_code`、`identifies_code`） | 照抄（含 mgstage URL 分支，纯函数无害） |
 | `tests/test_identity.py`、`tests/test_sources_contract.py` | `tests/test_metadata.py`（`SourceIdentityTests`）、`tests/test_metadata_sources.py`（`ContractTests`、`FailureReasonTests`） | 改 pytest 风格 |
+| `src/hidden_shelf/scrape/access.py` | `src/peach/scraping_access.py`（`SOURCES`、`FIRST_BLOCKED_PAUSE`、`pause_source`、`cookie_jar`、`SourceTransport`） | 只留 8 站；冷却记录合成一个 JSON；去浏览器传输、凭据库、流量计费与 `via` |
+| `src/hidden_shelf/scrape/snapshots.py` | `src/peach/library_processing.py`（`_evidence_path`、`_cached_evidence`、`_MissCache`、`MISS_TTL_SECONDS`） | 结果与「没有」合写一个快照文件；去 `joined` 接入时刻 |
+| `tests/test_access.py`（后半） | `tests/test_metadata_sources.py`（`SiteCooldownTests`） | 改 pytest 风格 |
