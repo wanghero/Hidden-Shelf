@@ -186,3 +186,33 @@ def test_stream_pings_while_idle(tmp_path: Path, tmp_root: Path):
     gate.set()
     client.manager.wait(timeout=10)
     assert seen_ping
+
+
+# ---------- 前端静态资源的约束 ----------
+
+def test_i18n_dictionaries_have_same_keys():
+    import re
+    from hidden_shelf.serve.app import STATIC_DIR
+    text = (STATIC_DIR / "i18n.js").read_text(encoding="utf-8")
+    zh = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[0], re.M))
+    en = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[1], re.M))
+    assert zh == en and len(zh) > 50
+
+
+def test_progress_css_uses_only_tokens():
+    import re
+    from hidden_shelf.serve.app import STATIC_DIR
+    css = (STATIC_DIR / "progress.css").read_text(encoding="utf-8")
+    assert not re.findall(r"#[0-9a-fA-F]{3,6}\b|rgb\(", css)
+    for name in ("tokens.css", "ripple.js", "i18n.js", "progress-core.js", "progress.js", "progress.css"):
+        assert (STATIC_DIR / name).is_file(), name
+
+
+def test_index_html_references_static_and_no_external_urls(tmp_path: Path):
+    client = make_client(tmp_path, fake_pipeline())
+    page = client.get("/").text
+    for name in ("tokens.css", "progress.css", "i18n.js", "progress-core.js", "ripple.js", "progress.js"):
+        assert f"/static/{name}" in page, name
+    assert "http://" not in page and "https://" not in page, "页面不加载任何外网资源"
+    assert 'data-steps="scan,import,scrape,organize,media,build"' in page
+    assert "window.__shelfServe" in page and "stepLabels" in page and '"scrape"' in page

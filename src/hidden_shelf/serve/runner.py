@@ -102,9 +102,10 @@ def reduce_state(events: list[Event], steps_order: tuple[str, ...] = pipeline.ST
         if event.kind == "step.start":
             row.update(status=STATUS_RUNNING, started_at=event.ts, message=None)
         elif event.kind == "step.progress":
-            row["message"] = event.message
             if event.level == "warning" and (event.message or "").startswith("收到停止请求"):
                 state["cancel_requested"] = True
+            if row["status"] == STATUS_RUNNING:
+                row["message"] = event.message
         elif event.kind == "step.done":
             row.update(status=STATUS_DONE, stats=event.stats, finished_at=event.ts)
         elif event.kind == "step.failed":
