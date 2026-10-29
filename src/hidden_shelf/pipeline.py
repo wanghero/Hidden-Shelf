@@ -11,7 +11,7 @@ import sqlite3
 import sys
 import time
 import traceback
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime
 from pathlib import Path
@@ -56,6 +56,12 @@ class Progress:
     def done(self, stats: dict) -> None:
         pass
 
+    def failed(self, name: str, error: str) -> None:
+        """一步失败（`scrape` 软失败与其它硬失败都走这里）。"""
+
+    def skipped(self, name: str, reason: str) -> None:
+        """一步被跳过（`--offline`、`config.scrape=false`）。"""
+
 
 class ConsoleProgress(Progress):
     """打印到终端：`[扫描] 信息`。"""
@@ -82,6 +88,14 @@ class ConsoleProgress(Progress):
     def done(self, stats: dict) -> None:
         print(f"[{self.current}] 完成：{json.dumps(stats, ensure_ascii=False)}", file=self.stream, flush=True)
 
+    def failed(self, name: str, error: str) -> None:
+        label = STEP_LABELS.get(name, name)
+        print(f"[{label}] ✗ {label}失败：{error}", file=self.stream, flush=True)
+
+    def skipped(self, name: str, reason: str) -> None:
+        label = STEP_LABELS.get(name, name)
+        print(f"[{label}] 跳过{label}（{reason}）", file=self.stream, flush=True)
+
 
 @dataclass
 class RunResult:
@@ -91,6 +105,8 @@ class RunResult:
     failed_step: str = ""
     log_path: Path | None = None
     index_html: Path | None = None
+    #: 调用方经 `cancel` 回调在步与步之间停下了；`ok` 仍是已跑步骤的结果。
+    cancelled: bool = False
 
 
 def _stats(value) -> dict:
@@ -101,8 +117,13 @@ def _stats(value) -> dict:
 
 
 def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] = STEPS,
-        progress: Progress | None = None, scrape_options: ScrapeOptions | None = None) -> RunResult:
-    """跑指定步骤。`organize` 之后会自动再 `scan` 一次（路径变了）。"""
+        progress: Progress | None = None, scrape_options: ScrapeOptions | None = None,
+        cancel: Callable[[], bool] | None = None) -> RunResult:
+    """跑指定步骤。`organize` 之后会自动再 `scan` 一次（路径变了）。
+
+    `cancel()` 只在每步开始前检查：为真就不再开后续步，`result.cancelled = True`。步内不打断——归位是事务、
+    刮削每个番号后提交，当前步跑完才停，没有半成品。
+    """
     progress = progress or Progress()
     root = Path(root)
     paths = ShelfPaths(root)
@@ -129,6 +150,11 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
 
             write(f"开始：{root}，步骤 {list(steps)}")
             for name in steps:
+                if cancel is not None and cancel():
+                    result.cancelled = True
+                    write(f"已取消：在 {STEP_LABELS.get(name, name)} 之前停下")
+                    progress.log("warning", f"已取消：在{STEP_LABELS.get(name, name)}之前停下")
+                    break
                 progress.step(name)
                 write(f"== {name} ==")
                 if name == "scrape" and (not config.scrape or scrape_options.offline):
@@ -138,7 +164,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                     _run_finished(connection, run_id, "skipped", stats)
                     result.steps[name] = stats
                     write(f"跳过：{reason}")
-                    progress.log("info", f"跳过刮削（{reason}）")
+                    progress.skipped(name, reason)
                     continue
                 run_id = _run_started(connection, name)
                 try:
@@ -147,7 +173,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                     detail = f"{type(error).__name__}: {error}"
                     write(f"失败：{detail}\n{traceback.format_exc()}")
                     _run_finished(connection, run_id, "failed", {"error": detail})
-                    progress.log("error", f"{STEP_LABELS.get(name, name)}失败：{detail}")
+                    progress.failed(name, detail)
                     if name in _SOFT_STEPS:
                         result.steps[name] = {"error": detail}
                         continue
@@ -159,7 +185,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                 _run_finished(connection, run_id, "ok", stats)
                 write(f"完成：{json.dumps(stats, ensure_ascii=False)}")
                 progress.done(stats)
-            if result.ok and "build" in steps:
+            if result.ok and "build" in result.steps:
                 result.index_html = paths.index_html
     finally:
         connection.close()
