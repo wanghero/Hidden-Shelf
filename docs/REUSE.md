@@ -29,3 +29,6 @@
 | `src/hidden_shelf/scrape/access.py` | `src/peach/scraping_access.py`（`SOURCES`、`FIRST_BLOCKED_PAUSE`、`pause_source`、`cookie_jar`、`SourceTransport`） | 只留 8 站；冷却记录合成一个 JSON；去浏览器传输、凭据库、流量计费与 `via` |
 | `src/hidden_shelf/scrape/snapshots.py` | `src/peach/library_processing.py`（`_evidence_path`、`_cached_evidence`、`_MissCache`、`MISS_TTL_SECONDS`） | 结果与「没有」合写一个快照文件；去 `joined` 接入时刻 |
 | `tests/test_access.py`（后半） | `tests/test_metadata_sources.py`（`SiteCooldownTests`） | 改 pytest 风格 |
+| `src/hidden_shelf/scrape/routes.py` | `src/peach/metadata_routes.py` | 只留 8 站；每站各成一档（综合索引三家逐家短路，用户决定）；去 amane 桥与未接站 |
+| `src/hidden_shelf/scrape/policy.py` | `src/peach/metadata_policy.py` | 只登记 8 站；`LOCAL_NFO_SOURCE` 改 `nfo`；新增 `owner_tier` 把 `field_owners` 归属折成层级 |
+| `tests/test_routes.py`、`tests/test_policy.py` | `tests/test_metadata_routes.py`、`tests/test_metadata_policy.py` | 改 pytest 风格，期望按裁剪后的表改 |
