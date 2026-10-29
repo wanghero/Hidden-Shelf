@@ -21,3 +21,5 @@
 | `src/hidden_shelf/media/fingerprint.py` | `src/peach/artifact_rules.py` | 去 `upgrade_rules` 与资源类来源；边车 `.rule` 存 JSON |
 | `src/hidden_shelf/media/covers.py`（海报比例常量） | `src/peach/jav_poster_crop.py`（`SLEEVE_RATIO_*`、`PANEL_ASPECT`） | 只取 `ratio` 先验，不做 OpenCV 折痕检测 |
 | `src/hidden_shelf/fsutil.py` | `src/peach/fsutil.py` | 去 Windows 占用重试与权限位 |
+| `src/hidden_shelf/scrape/transport.py` | `src/peach/http.py`（`HttpRequest`/`HttpResponse`、有界读取）、`scripting.HostLimiter`、`user_agent.py`、`jav_cover_fetch._fetch`、`scraping_access.SourceTransport`（重定向规则） | 去内网判据、浏览器传输、流量计费；`curl_cffi` 改为可选 |
+| `src/hidden_shelf/netconfig.py` | `src/peach/peach_proxy.py`（三选一语义与地址校验） | 改为一个 JSON 文件；加各站 Cookie/开关与路由覆盖 |
