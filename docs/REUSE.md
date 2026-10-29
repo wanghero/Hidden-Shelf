@@ -36,7 +36,8 @@
 | `src/hidden_shelf/scrape/sources/dmm.py` | `src/peach/sources/dmm.py` | 导入改本项目模块；GraphQL 操作名改 `Shelf*`；去 ADR 引用 |
 | `src/hidden_shelf/scrape/sources/onepondo.py` | `src/peach/sources/onepondo.py` | 导入改本项目模块 |
 | `tests/test_sources_official.py`、`tests/fixtures/sources/*.json` | `tests/test_metadata_r18dev.py`、`test_metadata_dmm.py`、`test_metadata_1pondo.py` | 改 pytest 风格；夹具从测试常量落成 JSON 文件；去 `LibraryMetadataProvider` 那一层 |
-| `src/hidden_shelf/scrape/covers.py`（`THUMBNAIL`、`is_cross_product_cover`） | `src/peach/jav_cover_fetch.py`（同名两项及其私有正则） | 照抄；下载与择优在计划 2 Task 9 另加 |
+| `src/hidden_shelf/scrape/covers.py` | `src/peach/jav_cover_fetch.py`（`Candidate`、`candidate_for`、`code_variants`、`cid_variants`、`dmm_cdn_images`、`official_image_candidates`、`content_id_images`、`is_javdb_image`、`THUMBNAIL`、`is_cross_product_cover`、`probe_size`、`_usable_candidates`、`_measure`、`_download_best`） | 去 Prestige API、MGS、DUGA 现问、成功日志复用、`known_sizes` 升级模式与诊断计数；Referer 按 `access.SOURCES` 的登录页；`best_cover` 收候选列表不自己找来源 |
+| `tests/test_covers_online.py` | `tests/test_jav_covers.py`（`CodeShapeTests`、`ContentIdTests`、`BestCoverTests`） | 改 pytest 风格 |
 | `src/hidden_shelf/scrape/sources/javdb_helpers.py` | `src/peach/javdb.py`（`LOGIN`、`RECORD_KIND`、`clean`） | 只取这三项 |
 | `src/hidden_shelf/scrape/sources/javdb.py` | `src/peach/sources/javdb.py` | 不搬 `resources`、`parse_magnets`、`parse_comment_links`、`merge_resources`；`extra` 去 `javdb_rule` |
 | `src/hidden_shelf/scrape/sources/javbus.py` | `src/peach/sources/javbus.py` | 导入改本项目模块；措辞「采集设置」→「全局配置」 |
