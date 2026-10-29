@@ -50,3 +50,5 @@
 | `src/hidden_shelf/scrape/names.py` | `src/peach/metadata_alias_resolve.py`（`is_descriptive`、`stage_name`、`is_planning_alias`）、`src/peach/metadata.py`（`split_former_name`、`normalized_performers`） | 企划名义剪得出用艺名、剪不出整条丢弃并记 warning（无复核队列）；拉丁字母名不经企划名义判据 |
 | `src/hidden_shelf/entities.py`（`strip_zero_width`、`collapse_repeated_entity_name`、`resolve_performer` 的解析顺序） | `src/peach/entities.py`（同名两项、`upsert_asset_entity`、`resolve_entity`） | 去 creator、合并重定向与扁平投影；`strip_zero_width` 落在 `db.py` 供 `normalize_name` 用 |
 | `tests/test_names.py`、`tests/test_entities_scrape.py` | `tests/test_composite_name_split.py`、`test_performer_localization.py`（kanji 断言）、`test_entity_merge.py`（`collapse_repeated_entity_name`） | 改 pytest 风格 |
+| `src/hidden_shelf/scrape/settle.py` | `src/peach/metadata_policy.py`（`chain_rank`/`sort_candidates` 的用法）、`metadata_auto_apply._preferred_candidate`；ADR-0034/0035/0038 的三条规则 | 自写结算函数：无复核队列，分歧只留 `overruled` |
+| `src/hidden_shelf/scrape/apply.py`（演员落库顺序） | `src/peach/metadata_auto_apply._apply_performer_candidate` | 只增不删；去 `asset_tag` 投影；覆盖判据改成「来源层级严格高于现归属」 |
