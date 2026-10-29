@@ -1,13 +1,39 @@
 # Hidden Shelf（藏片阁）
 
-本地番号片整理器：认番号、刮削、按 `厂牌/番号/` 归位，并在盘根目录生成纯静态站，插盘双击 `index.html` 即可浏览播放。
+本地番号片整理器：认番号、联网刮削、按 `厂牌/番号/` 归位，并在盘根目录生成纯静态站，插盘双击 `index.html` 即可浏览播放。
 
 - 设计文档：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`
 - 实施计划 1（本地流水线）：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`
+- 实施计划 2（联网刮削）：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`
 - 许可：AGPL-3.0-or-later。策略模块移植自 [peach-mitao/peach](https://github.com/peach-mitao/peach)，登记见 `docs/REUSE.md`。
 
 ```bash
 uv sync
 uv run pytest -v
-uv run shelf run <盘根目录>
+uv run shelf run <盘根目录>              # 扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站
+uv run shelf run <盘根目录> --offline    # 不联网
+uv run shelf config                     # 看全局配置在哪、代理模式、各站有没有 Cookie
 ```
+
+## 联网刮削的全局配置
+
+刮削用到的代理与各站 Cookie 放在 `~/.hidden-shelf/config.json`（环境变量 `HIDDEN_SHELF_HOME` 可改目录），第一次运行会写出默认值。
+凭据只住在这里：不进盘里的任何文件、不进日志、不进快照。`shelf config` 也只说有没有，不打印值。
+
+```json
+{
+  "network": { "mode": "environment", "proxy": "" },
+  "sources": {
+    "javdb":  { "enabled": true, "cookie": "_jdb_session=...; over18=1" },
+    "javbus": { "enabled": true, "cookie": "existmag=all" },
+    "avbase": { "enabled": false, "cookie": "" }
+  },
+  "routes": { "censored": ["r18dev", "dmm", "javdb"] }
+}
+```
+
+- `network.mode`：`environment`（跟随 `HTTPS_PROXY` 等环境变量）、`direct`（忽略环境变量直连）、`proxy`（用 `network.proxy`，如 `http://127.0.0.1:7890` 或 `socks5h://127.0.0.1:1080`）。
+- `sources.<站>.cookie`：浏览器里复制的一行 Cookie 请求头；只有 javdb（配额与登录墙）和 javbus（年龄门）需要。`enabled: false` 整站不问。
+- `routes`：整条替换某类番号的来源链。内容类型 `censored | amateur | uncensored | fc2`，来源名 `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`。每站各是一档、逐家短路：有一家答了就停。
+
+快照（`<番号>-<来源>.json`）与来源冷却（`_cooldown.json`）在 `<盘根>/.shelf/sources/`，7 天内不重问；403 首停 15 分钟连着翻倍，429 按站方说的时间。

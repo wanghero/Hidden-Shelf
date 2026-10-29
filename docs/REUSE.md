@@ -53,3 +53,6 @@
 | `tests/test_names.py`、`tests/test_entities_scrape.py` | `tests/test_composite_name_split.py`、`test_performer_localization.py`（kanji 断言）、`test_entity_merge.py`（`collapse_repeated_entity_name`） | 改 pytest 风格 |
 | `src/hidden_shelf/scrape/settle.py` | `src/peach/metadata_policy.py`（`chain_rank`/`sort_candidates` 的用法）、`metadata_auto_apply._preferred_candidate`；ADR-0034/0035/0038 的三条规则 | 自写结算函数：无复核队列，分歧只留 `overruled` |
 | `src/hidden_shelf/scrape/apply.py`（演员落库顺序） | `src/peach/metadata_auto_apply._apply_performer_candidate` | 只增不删；去 `asset_tag` 投影；覆盖判据改成「来源层级严格高于现归属」 |
+| `src/hidden_shelf/scrape/avatars.py` | `src/peach/sources/r18dev.py`（`ACTRESS_IMAGE` 的用法） | 自写：只下不量尺寸，404 从元数据拿掉 |
+| `src/hidden_shelf/scrape/run.py` | `src/peach/library_processing.py`（`_query` 的按档问、`settles` 短路、快照与「没有」记录） | 自写编排：每站各一档逐家短路；无复核队列；网络不可用提前返回 |
+| `scripts/smoke_sources.py` | — | 自写 |
