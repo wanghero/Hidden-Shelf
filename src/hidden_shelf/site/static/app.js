@@ -107,7 +107,9 @@
   var byId = {};
   works.forEach(function (work) { byId[work.id] = work; });
   var names = { performers: {}, tags: {} };
-  (entities.performers || []).forEach(function (p) { names.performers[p.id] = p.name; });
+  var avatars = {};
+  (entities.performers || []).forEach(function (p) { names.performers[p.id] = p.name; if (p.avatar) avatars[p.id] = p.avatar; });
+  function avatarOf(pid) { return avatars[pid] || null; }
   (entities.tags || []).forEach(function (tg) { names.tags[tg.id] = tg.name; });
   var probe = document.createElement('video');
   var canPlayType = probe && probe.canPlayType ? function (mime) { return probe.canPlayType(mime); } : null;
@@ -440,10 +442,17 @@
 
     var performers = (work.performers || []).map(function (pid) {
       var name = names.performers[pid] || String(pid);
-      return h('a', { class: 'chip-link', href: '#/performer/' + pid, 'data-ripple': true }, h('span', { class: 'avatar', text: name.charAt(0) }), h('span', { text: name }));
+      var avatar = avatarOf(pid);
+      return h('a', { class: 'chip-link', href: '#/performer/' + pid, 'data-ripple': true },
+        avatar ? h('img', { class: 'avatar', src: core.encodeMediaPath(avatar), alt: '' }) : h('span', { class: 'avatar', text: name.charAt(0) }),
+        h('span', { text: name }));
     });
     var tags = (work.tags || []).map(function (tid) {
       return h('a', { class: 'pill primary link', href: '#/tag/' + tid, text: names.tags[tid] || String(tid) });
+    });
+    // 出处是外链（新开标签），不是资源加载：站点自己不请求外网。
+    var sources = (work.sources || []).filter(function (s) { return s && /^https:\/\//.test(s.url); }).map(function (s) {
+      return h('a', { class: 'pill link', href: s.url, target: '_blank', rel: 'noopener noreferrer', text: s.source });
     });
 
     var player = renderPlayer(part, parts, function (next) { currentPart[id] = next; render(); }, label);
@@ -473,7 +482,8 @@
         h('section', { class: 'card info-card' }, rows(),
           performers.length ? h('div', { class: 'info-block' }, h('h3', { class: 'facet-title', text: t('work.performers') }), h('div', { class: 'chips' }, performers)) : null,
           tags.length ? h('div', { class: 'info-block' }, h('h3', { class: 'facet-title', text: t('work.tags') }), h('div', { class: 'chips' }, tags)) : null,
-          work.plot ? h('div', { class: 'info-block' }, h('h3', { class: 'facet-title', text: t('work.plot') }), h('p', { class: 'plot', text: work.plot })) : null)),
+          work.plot ? h('div', { class: 'info-block' }, h('h3', { class: 'facet-title', text: t('work.plot') }), h('p', { class: 'plot', text: work.plot })) : null,
+          sources.length ? h('div', { class: 'info-block' }, h('h3', { class: 'facet-title', text: t('work.sources') }), h('div', { class: 'chips' }, sources)) : null)),
       player,
       sheet,
       performerSet.length ? related('work.related.performer', function (o) { return (o.performers || []).some(function (p) { return performerSet.indexOf(p) !== -1; }); }) : null,

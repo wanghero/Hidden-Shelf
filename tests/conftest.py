@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path_factory, monkeypatch):
+    """全局配置落在临时目录，8 站全部停用：测试里的流水线永远不碰网络。要联网行为的测试自己传 GlobalConfig。"""
+    home = tmp_path_factory.mktemp("hidden-shelf-home")
+    monkeypatch.setenv("HIDDEN_SHELF_HOME", str(home))
+    disabled = {name: {"enabled": False, "cookie": ""} for name in
+                ("r18dev", "dmm", "1pondo", "fc2", "javarchive", "javdb", "javbus", "avbase")}
+    (home / "config.json").write_text(json.dumps({"network": {"mode": "direct", "proxy": ""}, "sources": disabled,
+                                                  "routes": {}}), encoding="utf-8")
+    return home
 
 
 @pytest.fixture

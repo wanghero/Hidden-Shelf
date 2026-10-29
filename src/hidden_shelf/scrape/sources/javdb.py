@@ -95,7 +95,7 @@ class JavDBSource(SiteSource):
         panel = {clean(label): value for label, value in _PANEL.findall(text)}
         shown = clean(panel.get("番號", "")).replace(" ", "")
         if not same_release_code(code, shown):
-            raise SourceFailure(FailureReason.PARSE_ERROR, "javdb 详情页的番号与搜索结果不一致")
+            raise SourceFailure(FailureReason.PARSE_ERROR, "javdb 详情页的番号与搜索结果不一致", detail="identity_mismatch")
         runtime = re.search(r"\d+", clean(panel.get("時長", "")))
         soup = BeautifulSoup(text, "html.parser")
         title = soup.select_one("strong.current-title")

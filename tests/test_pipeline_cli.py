@@ -25,7 +25,7 @@ def disk(tmp_root: Path, fake_video):
 def test_run_end_to_end(disk):
     result = pipeline.run(disk, progress=pipeline.ConsoleProgress())
     assert result.ok, result.error
-    assert set(result.steps) == {"scan", "import", "organize", "media", "build"}
+    assert set(result.steps) == {"scan", "import", "scrape", "organize", "media", "build"}
     assert (disk / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
     assert (disk / "_未知厂牌" / "259LUXU-1475" / "259LUXU-1475-cd1.mp4").is_file()
     assert (disk / "未识别" / "c" / "随手拍.mp4").is_file()
@@ -41,7 +41,7 @@ def test_run_end_to_end(disk):
     assert result.index_html == disk / "index.html"
     with sqlite3.connect(disk / ".shelf" / "shelf.db") as connection:
         runs = connection.execute("SELECT step,status FROM run ORDER BY id").fetchall()
-        assert runs == [("scan", "ok"), ("import", "ok"), ("organize", "ok"), ("media", "ok"), ("build", "ok")]
+        assert runs == [("scan", "ok"), ("import", "ok"), ("scrape", "ok"), ("organize", "ok"), ("media", "ok"), ("build", "ok")]
         assert connection.execute("SELECT count(*) FROM asset WHERE vanished=1").fetchone()[0] == 0
         assert connection.execute("SELECT path FROM asset WHERE code='ABP-758'").fetchone()[0] == "Prestige/ABP-758/ABP-758.mp4"
 

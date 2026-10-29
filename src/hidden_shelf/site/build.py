@@ -83,12 +83,46 @@ def _entity_links(connection: sqlite3.Connection, role: str) -> dict[int, list[i
     return found
 
 
-def _view_model(connection: sqlite3.Connection, config: ShelfConfig) -> tuple[list[dict], dict, list[dict], dict]:
+def _source_links(paths: ShelfPaths) -> dict[str, list[dict]]:
+    """每个番号的来源出处 `[{source, url}]`，从 `.shelf/sources/<番号>-<来源>.json` 的成功快照里读。"""
+    found: dict[str, list[dict]] = {}
+    if not paths.sources.is_dir():
+        return found
+    for path in sorted(paths.sources.glob("*-*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict) or not isinstance(record.get("result"), dict):
+            continue
+        code, source = str(record.get("code") or ""), str(record.get("source") or "")
+        records = record["result"].get("records")
+        first = records[0] if isinstance(records, list) and records and isinstance(records[0], dict) else record["result"]
+        url = str(first.get("source_url") or "").strip()
+        if code and source and url.startswith("https://"):
+            found.setdefault(code, []).append({"source": source, "url": url})
+    return found
+
+
+def _avatars(connection: sqlite3.Connection, paths: ShelfPaths) -> dict[int, str]:
+    """艺人 id → 头像的站内相对路径（文件在才算）。"""
+    found: dict[int, str] = {}
+    for row in connection.execute("SELECT id, avatar_file FROM entity WHERE kind='performer' AND avatar_file IS NOT NULL"):
+        rel = str(row["avatar_file"] or "").strip()
+        if rel and paths.shelf_absolute(rel).is_file():
+            found[int(row["id"])] = f".shelf/{rel}"
+    return found
+
+
+def _view_model(connection: sqlite3.Connection, config: ShelfConfig,
+                paths: ShelfPaths | None = None) -> tuple[list[dict], dict, list[dict], dict]:
     rows = connection.execute(
         "SELECT * FROM asset WHERE medium='video' AND vanished=0 ORDER BY code_key, id").fetchall()
     performers_of = _entity_links(connection, "performer")
     tags_of = _entity_links(connection, "tag")
     entity_names = {int(r["id"]): r["canonical_name"] for r in connection.execute("SELECT id,canonical_name FROM entity")}
+    source_links = _source_links(paths) if paths is not None else {}
+    avatars = _avatars(connection, paths) if paths is not None else {}
 
     groups: dict[str, list[sqlite3.Row]] = {}
     unrecognized: list[dict] = []
@@ -154,6 +188,7 @@ def _view_model(connection: sqlite3.Connection, config: ShelfConfig) -> tuple[li
             "sheet": _shelf_path(head["sheet_file"]),
             "addedAt": min((m["first_seen"] for m in members if m["first_seen"]), default=None),
             "size": sum(int(m["size"] or 0) for m in members),
+            "sources": source_links.get(code_key, []),
         }
         works.append(work)
         for entity_id in performers:
@@ -171,7 +206,7 @@ def _view_model(connection: sqlite3.Connection, config: ShelfConfig) -> tuple[li
                       key=lambda item: (-item["count"], item["name"]))
 
     entities = {
-        "performers": [{**item, "avatar": None} for item in roster(performer_count)],
+        "performers": [{**item, "avatar": avatars.get(item["id"])} for item in roster(performer_count)],
         "studios": sorted(({"id": name, "name": name, "count": count} for name, count in studio_count.items()),
                           key=lambda item: (-item["count"], item["name"])),
         "series": sorted(({"id": name, "name": name, "count": count} for name, count in series_count.items()),
@@ -209,7 +244,7 @@ def build_site(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfC
     """生成全部站点产物。"""
     paths.ensure()
     limit = SPLIT_BYTES if split_bytes is None else split_bytes
-    works, entities, unrecognized, totals = _view_model(connection, config)
+    works, entities, unrecognized, totals = _view_model(connection, config, paths)
     progress(f"出站：{len(works)} 部作品，{len(unrecognized)} 个未识别")
 
     # 清掉上次的 data 文件，避免旧分片残留。

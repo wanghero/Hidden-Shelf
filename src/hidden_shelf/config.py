@@ -22,6 +22,8 @@ class ShelfConfig:
     code_patterns: list[str] = field(default_factory=list)
     #: 站点默认语言：`zh` | `en`。
     language: str = "zh"
+    #: 是否联网刮削（计划 2）。关掉就只走本地流水线。
+    scrape: bool = True
 
     @classmethod
     def load(cls, paths: ShelfPaths) -> "ShelfConfig":

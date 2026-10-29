@@ -1,7 +1,8 @@
-"""流水线：scan → import → organize →（再 scan）→ media → build，每步记 `run` 表与日志文件。
+"""流水线：scan → import → scrape → organize →（再 scan）→ media → build，每步记 `run` 表与日志文件。
 
 `Progress` 是进度回调协议：命令行实现 `ConsoleProgress`，计划 3 的进度网页实现 SSE 版。
-任一步抛异常：记录、停止后续步、返回结果里 `ok=False`。
+任一步抛异常：记录、停止后续步、返回结果里 `ok=False`。唯一的例外是 `scrape`：它失败只记本步 `failed`，
+后续步照跑——联网不通不该拦住本地整理。`config.scrape` 为假或 `offline=True` 时 `scrape` 记 `skipped`。
 """
 from __future__ import annotations
 
@@ -24,8 +25,20 @@ from .paths import ShelfPaths
 from .scan import scan
 from .site.build import build_site
 
-STEPS: tuple[str, ...] = ("scan", "import", "organize", "media", "build")
-STEP_LABELS = {"scan": "扫描", "import": "导入", "organize": "归位", "media": "媒体", "build": "出站"}
+STEPS: tuple[str, ...] = ("scan", "import", "scrape", "organize", "media", "build")
+STEP_LABELS = {"scan": "扫描", "import": "导入", "scrape": "刮削", "organize": "归位", "media": "媒体", "build": "出站"}
+#: 失败不中断后续步的那一步。
+_SOFT_STEPS = frozenset({"scrape"})
+
+
+@dataclass
+class ScrapeOptions:
+    """这一趟刮削的命令行开关。"""
+
+    offline: bool = False
+    force: bool = False
+    only_sources: tuple[str, ...] | None = None
+    routes: dict[str, list[str]] | None = None
 
 
 class Progress:
@@ -88,13 +101,14 @@ def _stats(value) -> dict:
 
 
 def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] = STEPS,
-        progress: Progress | None = None) -> RunResult:
+        progress: Progress | None = None, scrape_options: ScrapeOptions | None = None) -> RunResult:
     """跑指定步骤。`organize` 之后会自动再 `scan` 一次（路径变了）。"""
     progress = progress or Progress()
     root = Path(root)
     paths = ShelfPaths(root)
     paths.ensure()
     config = config or ShelfConfig.load(paths)
+    scrape_options = scrape_options or ScrapeOptions()
     result = RunResult()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     result.log_path = paths.logs / f"run-{stamp}.log"
@@ -117,14 +131,26 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
             for name in steps:
                 progress.step(name)
                 write(f"== {name} ==")
+                if name == "scrape" and (not config.scrape or scrape_options.offline):
+                    reason = "--offline" if scrape_options.offline else "config.scrape=false"
+                    stats = {"skipped": True, "reason": reason}
+                    run_id = _run_started(connection, name)
+                    _run_finished(connection, run_id, "skipped", stats)
+                    result.steps[name] = stats
+                    write(f"跳过：{reason}")
+                    progress.log("info", f"跳过刮削（{reason}）")
+                    continue
                 run_id = _run_started(connection, name)
                 try:
-                    stats = _execute(name, connection, paths, config, emit)
-                except Exception as error:  # noqa: BLE001 - 任何一步失败都要记录并停下
+                    stats = _execute(name, connection, paths, config, emit, scrape_options)
+                except Exception as error:  # noqa: BLE001 - 任何一步失败都要记录
                     detail = f"{type(error).__name__}: {error}"
                     write(f"失败：{detail}\n{traceback.format_exc()}")
                     _run_finished(connection, run_id, "failed", {"error": detail})
                     progress.log("error", f"{STEP_LABELS.get(name, name)}失败：{detail}")
+                    if name in _SOFT_STEPS:
+                        result.steps[name] = {"error": detail}
+                        continue
                     result.ok = False
                     result.error = detail
                     result.failed_step = name
@@ -140,11 +166,20 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
     return result
 
 
-def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig, emit) -> dict:
+def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig, emit,
+             scrape_options: ScrapeOptions) -> dict:
     if name == "scan":
         return _stats(scan(connection, paths, config, progress=emit))
     if name == "import":
         return _stats(import_local(connection, paths, progress=emit))
+    if name == "scrape":
+        from .netconfig import GlobalConfig
+        from .scrape.run import scrape_assets
+        global_config = GlobalConfig.load()
+        if scrape_options.routes:
+            global_config.routes = dict(scrape_options.routes)
+        return _stats(scrape_assets(connection, paths, config, global_config=global_config, progress=emit,
+                                    force=scrape_options.force, only_sources=scrape_options.only_sources))
     if name == "organize":
         stats = _stats(organize(connection, paths, config, progress=emit))
         # 路径变了，再扫一遍让库与盘一致（也把搬去 未识别/ 的附属文件登记好）。

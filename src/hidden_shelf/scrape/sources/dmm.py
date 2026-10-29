@@ -194,7 +194,7 @@ class DmmSource(SiteSource):
             raise SourceFailure(FailureReason.PARSE_ERROR, NOT_JSON)
         cid = str(item["id"])
         if not identifies_code(code, {"content_id": cid, "id": item.get("makerContentId")}):
-            raise SourceFailure(FailureReason.PARSE_ERROR, "来源返回的番号不匹配")
+            raise SourceFailure(FailureReason.PARSE_ERROR, "来源返回的番号不匹配", detail="identity_mismatch")
         name = lambda key: str((item.get(key) or {}).get("name") or "")
         rows = lambda key: [row for row in item.get(key) or [] if isinstance(row, dict) and row.get("name")]
         directors = rows("directors")
