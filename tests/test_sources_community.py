@@ -330,7 +330,7 @@ def test_an_avbase_challenge_served_with_200_pauses_the_whole_site(tmp_path: Pat
     assert len(calls) == 1
 
 
-def test_the_six_sites_are_registered():
-    assert set(SITE_SOURCES) == {"r18dev", "dmm", "1pondo", "javdb", "javbus", "avbase"}
+def test_the_community_sites_are_registered():
+    assert {"javdb", "javbus", "avbase"} <= set(SITE_SOURCES)
     for name, cls in SITE_SOURCES.items():
         assert cls.DEFAULT.name == name

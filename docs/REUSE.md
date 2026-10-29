@@ -42,3 +42,6 @@
 | `src/hidden_shelf/scrape/sources/javbus.py` | `src/peach/sources/javbus.py` | 导入改本项目模块；措辞「采集设置」→「全局配置」 |
 | `src/hidden_shelf/scrape/sources/avbase.py` | `src/peach/sources/avbase.py` | 导入改本项目模块 |
 | `tests/test_sources_community.py`、`tests/test_scrape_covers.py`、`tests/fixtures/sources/*.html` | `tests/test_community_catalog.py`（解析部分）、`tests/test_metadata_sources.py`（`JavDBResourceTests` 三条、`SiteCooldownTests` AVBase 一条）、`tests/test_jav_covers.py`（`CrossProductCoverTests`） | 改 pytest 风格；页面常量落成 HTML 夹具 |
+| `src/hidden_shelf/scrape/sources/fc2.py` | `src/peach/sources/fc2.py` | 去 fc2cmadb/FC2PPV-DB/JAVten 的说明，FC2 链只剩 fc2 → javarchive → javdb |
+| `src/hidden_shelf/scrape/sources/javarchive.py` | `src/peach/sources/javarchive.py` | `NotFound` 改从本项目模块导入 |
+| `tests/test_sources_fc2.py`、`tests/fixtures/sources/fc2-*.html`、`javarchive-*.html` | `tests/test_metadata_fc2.py`（`Fc2CodeTests`、`Fc2ShopPageTests`、`JavArchiveTests`） | 改 pytest 风格；页面落成 HTML 夹具，变体用字节替换 |
