@@ -20,7 +20,7 @@ from hidden_shelf.scrape.access import (
     source_for,
 )
 from hidden_shelf.scrape.sources import FailureReason, Session, SiteConfig, SiteRecord, SiteSource, SourceFailure
-from hidden_shelf.scrape.transport import HostLimiter, HttpRequest, HttpResponse
+from hidden_shelf.scrape.transport import USER_AGENT, HostLimiter, HttpRequest, HttpResponse
 
 
 class Clock:
@@ -245,3 +245,24 @@ def test_a_nested_query_counts_one_failure_once(tmp_path: Path):
     with pytest.raises(SourceFailure):
         Nested().query("ABC-001", session=Session(transport))
     assert cooldown.blocks("javdb") == 1
+
+
+def test_source_transport_uses_saved_user_agent_and_cookie_for_any_source(tmp_path: Path):
+    """登录抓来的 Cookie 绑着那个浏览器的 UA（Cloudflare 的 cf_clearance 尤其如此）：有 UA 就用它；
+    avbase 没登记 cookie: True，但用户登录过就照样带。"""
+    seen = []
+
+    def handler(request):
+        seen.append((str(request.url), request.headers.get("cookie"), request.headers.get("user-agent")))
+        return httpx.Response(200, content=b"ok", request=request)
+    config = GlobalConfig(network_mode="direct", sources={
+        "avbase": SourceSettings(cookie="cf_clearance=zzz", user_agent="Mozilla/5.0 Mine"),
+        "javdb": SourceSettings(cookie="session=abc")})
+    cooldown = Cooldown(tmp_path / "_cooldown.json")
+    transport = SourceTransport(cooldown, config, limiter=HostLimiter({}, default=0.0, sleep=lambda s: None),
+                                httpx_transport=httpx.MockTransport(handler))
+    transport(HttpRequest("GET", "https://www.avbase.net/works?q=x", {}, None), 5.0, 100)
+    transport(HttpRequest("GET", "https://javdb.com/v/1", {}, None), 5.0, 100)
+    assert seen[0][1] == "cf_clearance=zzz" and seen[0][2] == "Mozilla/5.0 Mine"
+    assert seen[1][1] == "session=abc" and seen[1][2] == USER_AGENT
+    transport.close()

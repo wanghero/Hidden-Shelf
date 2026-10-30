@@ -43,6 +43,8 @@ def validate_proxy(address: str) -> str:
 class SourceSettings:
     enabled: bool = True
     cookie: str = ""
+    #: 登录时抓 Cookie 的那个浏览器的 User-Agent：Cloudflare 的放行 Cookie 绑 UA，换了串就等于没登录。
+    user_agent: str = ""
 
 
 @dataclass
@@ -76,7 +78,8 @@ class GlobalConfig:
         for name, item in sources.items():
             if isinstance(item, dict):
                 config.sources[str(name)] = SourceSettings(
-                    enabled=bool(item.get("enabled", True)), cookie=str(item.get("cookie") or ""))
+                    enabled=bool(item.get("enabled", True)), cookie=str(item.get("cookie") or ""),
+                    user_agent=str(item.get("user_agent") or ""))
         routes = raw.get("routes") if isinstance(raw.get("routes"), dict) else {}
         for kind, chain in routes.items():
             if isinstance(chain, str):
@@ -109,12 +112,23 @@ class GlobalConfig:
         item = self.sources.get(source)
         return "" if item is None else str(item.cookie or "")
 
+    def user_agent(self, source: str) -> str:
+        item = self.sources.get(source)
+        return "" if item is None else str(item.user_agent or "")
+
+    def set_login(self, source: str, cookie: str, user_agent: str) -> None:
+        """登录流程抓到的 Cookie 与 UA 写进这一站（只改内存，调用方 `save()`）；开关不动。"""
+        item = self.sources.get(source) or SourceSettings()
+        item.cookie = str(cookie or "")
+        item.user_agent = str(user_agent or "")
+        self.sources[source] = item
+
     def describe(self) -> dict:
         """给人看的摘要：不带 Cookie 值，只说有没有。"""
         return {
             "path": str(config_path()),
             "network": {"mode": self.network_mode, "proxy_saved": bool(self.proxy)},
-            "sources": {name: {"enabled": item.enabled, "cookie": bool(item.cookie)}
+            "sources": {name: {"enabled": item.enabled, "cookie": bool(item.cookie), "user_agent": bool(item.user_agent)}
                         for name, item in self.sources.items()},
             "routes": dict(self.routes),
         }

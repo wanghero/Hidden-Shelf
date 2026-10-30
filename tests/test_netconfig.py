@@ -92,3 +92,16 @@ def test_describe_hides_cookie_values():
     text = json.dumps(config.describe(), ensure_ascii=False)
     assert "secret=1" not in text
     assert config.describe()["sources"]["javdb"]["cookie"] is True
+
+
+def test_user_agent_roundtrip_and_set_login(home: Path):
+    config = GlobalConfig()
+    config.set_login("avbase", "cf_clearance=zzz", "Mozilla/5.0 Mine")
+    config.sources["avbase"].enabled = False
+    config.set_login("avbase", "cf_clearance=yyy", "Mozilla/5.0 Mine")   # 再登录一次不把开关打开
+    config.save()
+    again = GlobalConfig.load()
+    assert again.sources["avbase"] == SourceSettings(enabled=False, cookie="cf_clearance=yyy", user_agent="Mozilla/5.0 Mine")
+    assert again.user_agent("avbase") == "Mozilla/5.0 Mine" and again.user_agent("javdb") == ""
+    assert again.describe()["sources"]["avbase"] == {"enabled": False, "cookie": True, "user_agent": True}
+    assert "yyy" not in json.dumps(again.describe())

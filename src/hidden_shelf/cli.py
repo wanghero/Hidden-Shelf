@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 from pathlib import Path
 
 from . import __version__, pipeline
@@ -42,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--verbose", "-v", action="store_true", help="打印更多日志")
     config_cmd = subparsers.add_parser("config", help="打印全局配置位置、代理模式、各站 Cookie 有无与冷却状态（不打印 Cookie 值）")
     config_cmd.add_argument("root", nargs="?", help="盘根目录（给出时一并打印该盘的来源冷却状态）")
+    login_cmd = subparsers.add_parser("login", help="弹出浏览器登录来源站（javdb、javbus、avbase），把 Cookie 存进全局配置")
+    login_cmd.add_argument("source", help="来源名：javdb、javbus 或 avbase")
     serve_cmd = subparsers.add_parser("serve", help="起进度网页（只监听 127.0.0.1，默认端口 8031）并打开浏览器")
     serve_cmd.add_argument("--port", type=int, help="指定端口；被占就报错退出，不自动换口")
     serve_cmd.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
@@ -89,7 +92,7 @@ def _print_config(root: str | None) -> int:
     for name, spec in SOURCES.items():
         item = summary["sources"].get(name, {"enabled": True, "cookie": False})
         state = "启用" if item["enabled"] else "停用"
-        cookie = ("，Cookie：有" if item["cookie"] else "，Cookie：无") if spec.get("cookie") else ""
+        cookie = ("，Cookie：有" if item["cookie"] else "，Cookie：无") if (spec.get("cookie") or name == "avbase") else ""
         print(f"  {name:<11}{spec['label']:<12}{state}{cookie}")
     if summary["routes"]:
         print("来源链覆盖：" + json.dumps(summary["routes"], ensure_ascii=False))
@@ -107,6 +110,42 @@ def _print_config(root: str | None) -> int:
     return 0
 
 
+def _wait_for_enter(finish) -> None:
+    """后台线程：用户在终端按回车也算「完成」。"""
+    def read():
+        try:
+            sys.stdin.readline()
+        except (OSError, ValueError):
+            return
+        finish.set()
+    threading.Thread(target=read, daemon=True).start()
+
+
+def _login(source: str) -> int:
+    import threading as _threading
+
+    from .netconfig import GlobalConfig, config_path
+    from .scrape import login as login_module
+
+    hint = login_module.availability()
+    if hint:
+        print(hint, file=sys.stderr)
+        return 2
+    config = GlobalConfig.load()
+    finish = _threading.Event()
+    _wait_for_enter(finish)
+    try:
+        result = login_module.capture_login(source, config=config, finish=finish,
+                                            notify=lambda text: print(text.replace("点「完成」", "按回车")),
+                                            launch=login_module.launch_browser)
+    except login_module.LoginError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    config.save()
+    print(f"已保存 {result.cookies} 个 Cookie" + ("，浏览器 UA 已记录" if result.user_agent else "") + f"：{config_path()}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -115,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "config":
         return _print_config(args.root)
+    if args.command == "login":
+        return _login(args.source)
     if args.command == "serve":
         return _serve(args)
     root = Path(args.root).expanduser()

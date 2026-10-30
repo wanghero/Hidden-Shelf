@@ -35,7 +35,7 @@ SOURCES: dict[str, dict] = {
     # 三家社区来源拒绝访问时回 403，不发 Retry-After：javdb 是出口 IP 超了配额（一封 3～7 日），
     # AVBase 是 Cloudflare 验证，JavBus 的 403 原因未取得。封期里接着问只会每条都再撞一次。
     "javdb": {"label": "JavDB", "domains": ("javdb.com", "jdbstatic.com", "jdbimgs.com"), "login": "https://javdb.com/",
-              "cookie": True, "blocked_pause": 24 * 3600},
+              "login_url": "https://javdb.com/login", "cookie": True, "blocked_pause": 24 * 3600},
     "javbus": {"label": "JavBus", "domains": ("javbus.com",), "login": "https://www.javbus.com/",
                "cookie": True, "blocked_pause": 6 * 3600},
     "avbase": {"label": "AVBase", "domains": ("avbase.net",), "login": "https://www.avbase.net/",
@@ -230,10 +230,13 @@ class SourceTransport:
             options.pop("proxy", None)
             options["trust_env"] = False
             options["transport"] = self.httpx_transport
+        # 配置里有这一站的 Cookie 就带（不只登记了 `cookie: True` 的站：avbase 过了 Cloudflare 验证也是一份 Cookie），
+        # 有登录时记下的 UA 就用那个 UA——放行 Cookie 绑 UA，换了串等于没登录。
         cookies = None
-        if source and SOURCES[source].get("cookie") and self.config.cookie(source):
+        if source and self.config.cookie(source):
             cookies = cookie_jar(self.config.cookie(source), source)
-        client = httpx.Client(**options, follow_redirects=False, headers={"User-Agent": USER_AGENT}, cookies=cookies)
+        user_agent = (self.config.user_agent(source) if source else "") or USER_AGENT
+        client = httpx.Client(**options, follow_redirects=False, headers={"User-Agent": user_agent}, cookies=cookies)
         return HttpxTransport(client)
 
     def close(self) -> None:
