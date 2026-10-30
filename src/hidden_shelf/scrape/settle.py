@@ -16,6 +16,7 @@ from datetime import date
 from typing import Any
 
 from ..rules.codes import code_release_date
+from ..studios import canonical_studio
 from .names import normalized_performers
 from .policy import FALLBACK_SOURCES, FIELDS, blacklisted, chain_rank
 from .sources.base import SiteRecord
@@ -80,7 +81,8 @@ def extract(record: SiteRecord | Mapping[str, Any], *, source: str | None = None
 
     scalar("title", payload.get("title"))
     scalar("original_title", payload.get("original_title"))
-    scalar("studio", payload.get("maker") or payload.get("studio"))
+    # 厂牌先换成规范写法（カリビアンコム → Caribbeancom），几家来源写法不同也能在结算里对上。
+    scalar("studio", canonical_studio(payload.get("maker") or payload.get("studio")))
     scalar("series", payload.get("series"))
     scalar("release_date", normalized_release_date(payload.get("release_date")))
     genres = payload.get("genres")

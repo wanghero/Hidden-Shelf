@@ -47,10 +47,13 @@ def clean_person_name(name: str | None) -> str:
 
 
 def ensure_entity(connection: sqlite3.Connection, kind: str, name: str) -> int:
-    """按 `normalize_name` 合并同名实体，返回实体 id；名字为空抛 `ValueError`。"""
+    """按 `normalize_name` 合并同名实体，返回实体 id；名字为空抛 `ValueError`。厂牌先换成规范写法。"""
     if kind not in KINDS:
         raise ValueError(f"实体类型不在清单里：{kind!r}")
     canonical = " ".join(strip_zero_width(name).split())
+    if kind == "studio":
+        from .studios import canonical_studio  # 局部导入：studios 依赖 field_owners 与 db，避免环
+        canonical = canonical_studio(canonical)
     normalized = normalize_name(canonical)
     if not normalized:
         raise ValueError("实体名字是空的")
@@ -201,10 +204,13 @@ def resolve_performer(connection: sqlite3.Connection, name: str, *, provider: st
 
 
 def resolve_named(connection: sqlite3.Connection, kind: str, name: str) -> int:
-    """厂牌、系列、标签：规范名精确 > 唯一别名 > 新建。"""
+    """厂牌、系列、标签：规范名精确 > 唯一别名 > 新建。厂牌先换成规范写法。"""
     if kind not in KINDS:
         raise ValueError(f"实体类型不在清单里：{kind!r}")
     canonical = " ".join(strip_zero_width(name).split())
+    if kind == "studio":
+        from .studios import canonical_studio
+        canonical = canonical_studio(canonical)
     normalized = normalize_name(canonical)
     if not normalized:
         raise ValueError("实体名字是空的")

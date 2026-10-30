@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 0.4.6 - 2026-10-30
+
+### 变更
+
+- 厂牌 カリビアンコム 一律写成英文 **Caribbeancom**（`Carib`、`caribbeancom` 等写法同样归一；カリビアンコムプレミアム → Caribbeancompr）：刮削结算、NFO 导入、厂牌实体三处生效；已经刮过的老库在下一次 `shelf run` 的导入步自动改名并合并实体，归位会把 `カリビアンコム/` 搬到 `Caribbeancom/`。`overrides.json` 里用户自己写的字不动。
+
 ## 0.4.5 - 2026-10-30
 
 ### 修复
