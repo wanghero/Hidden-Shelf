@@ -2,6 +2,19 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 0.4.16 - 2026-10-30
+
+### 新增
+
+- 进度网页新增「来源与登录」面板：每站一个开关（关掉整站不问）、登录状态、冷却状态；要登录或要过验证的站（JavDB、JavBus、AVBase）有「登录」按钮，点了在本机弹出浏览器窗口，登录完关窗口或点「我已登录完成」，Cookie 与浏览器 UA 自动存进全局配置；冷却中的站可以一键「清除冷却」。接口 `GET/POST /api/sources`、`POST /api/login`、`POST /api/login/finish`、`POST /api/cooldown/clear`（都要同源头）。
+
+## 0.4.15 - 2026-10-30
+
+### 新增
+
+- `shelf login <站>`：弹出浏览器登录来源站（javdb、javbus、avbase），登录完关窗口或按回车，该站 Cookie 与浏览器 User-Agent 存进 `~/.hidden-shelf/config.json`，之后刮削带着它们请求。AVBase 的 Cloudflare 放行 Cookie 绑 UA，所以 UA 一起存。Playwright 是可选依赖：`uv sync --extra login` 再 `uv run playwright install chromium`，没装时命令行与网页都给出这两条命令。
+- 传输层改成「配置里有这一站的 Cookie 就带」，不再只认登记了需要 Cookie 的站。
+
 ## 0.4.14 - 2026-10-30
 
 ### 新增

@@ -22,6 +22,7 @@ from .. import __version__, pipeline
 from .browse import BrowseError, list_directory, list_roots
 from .events import RunLog
 from .runner import RunBusy, RunManager, RunOptions
+from .sources import LoginBusy, SourcePanel
 
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -31,7 +32,7 @@ TRUSTED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
 PING_SECONDS = 15.0
 STATIC_TYPES = {".css": "text/css", ".js": "application/javascript", ".svg": "image/svg+xml", ".png": "image/png"}
 #: 读本机目录结构的 GET 也要过同源校验。
-GUARDED_GET_PATHS = frozenset({"/api/browse"})
+GUARDED_GET_PATHS = frozenset({"/api/browse", "/api/sources"})
 
 
 def _trusted_origin(request: Request) -> bool:
@@ -73,8 +74,10 @@ def sse_stream(log: RunLog, last_seq: int, *, ping_seconds: float = PING_SECONDS
 
 
 def create_app(manager: RunManager | None = None, *, static_dir: Path = STATIC_DIR, template_dir: Path = TEMPLATE_DIR,
-               opener: Callable[[str], object] = webbrowser.open, ping_seconds: float = PING_SECONDS) -> FastAPI:
+               opener: Callable[[str], object] = webbrowser.open, ping_seconds: float = PING_SECONDS,
+               panel: SourcePanel | None = None) -> FastAPI:
     manager = manager or RunManager()
+    panel = panel or SourcePanel()
     app = FastAPI(title="Hidden Shelf 进度", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
     environment = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=select_autoescape(["html", "j2"]))
     app.state.manager = manager
@@ -152,6 +155,63 @@ def create_app(manager: RunManager | None = None, *, static_dir: Path = STATIC_D
         except BrowseError as error:
             return JSONResponse({"error": error.message}, status_code=error.status, headers=headers)
         return JSONResponse(asdict(listing), headers=headers)
+
+    async def _json(request: Request):
+        try:
+            payload = await request.json()
+        except ValueError:
+            return None
+        return payload if isinstance(payload, dict) else {}
+
+    @app.get("/api/sources")
+    def sources(root: str = ""):
+        return JSONResponse(panel.list_sources(root or None), headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/sources")
+    async def set_source(request: Request):
+        payload = await _json(request)
+        if payload is None:
+            return JSONResponse({"error": "请求体不是合法 JSON"}, status_code=400)
+        if not isinstance(payload.get("enabled"), bool):
+            return JSONResponse({"error": "enabled 要是 true 或 false"}, status_code=400)
+        try:
+            panel.set_enabled(str(payload.get("name") or ""), payload["enabled"])
+        except ValueError as error:
+            return JSONResponse({"error": str(error)}, status_code=400)
+        return {"ok": True}
+
+    @app.post("/api/login")
+    async def start_login(request: Request):
+        payload = await _json(request)
+        if payload is None:
+            return JSONResponse({"error": "请求体不是合法 JSON"}, status_code=400)
+        try:
+            panel.start_login(str(payload.get("name") or ""))
+        except ValueError as error:
+            return JSONResponse({"error": str(error)}, status_code=400)
+        except LoginBusy as error:
+            return JSONResponse({"error": str(error)}, status_code=409)
+        return JSONResponse({"started": True}, status_code=202)
+
+    @app.post("/api/login/finish")
+    async def finish_login(request: Request):
+        payload = await _json(request)
+        if payload is None:
+            return JSONResponse({"error": "请求体不是合法 JSON"}, status_code=400)
+        if not panel.finish_login(str(payload.get("name") or "")):
+            return JSONResponse({"error": "这一站没有正在进行的登录"}, status_code=409)
+        return JSONResponse({"finished": True}, status_code=202)
+
+    @app.post("/api/cooldown/clear")
+    async def clear_cooldown(request: Request):
+        payload = await _json(request)
+        if payload is None:
+            return JSONResponse({"error": "请求体不是合法 JSON"}, status_code=400)
+        try:
+            cleared = panel.clear_cooldown(str(payload.get("root") or ""), str(payload.get("name") or "") or None)
+        except ValueError as error:
+            return JSONResponse({"error": str(error)}, status_code=400)
+        return {"cleared": cleared}
 
     @app.get("/api/events")
     def events(request: Request, run: str | None = None):

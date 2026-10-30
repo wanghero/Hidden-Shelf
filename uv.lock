@@ -295,7 +295,7 @@ wheels = [
 
 [[package]]
 name = "hidden-shelf"
-version = "0.4.14"
+version = "0.4.16"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },

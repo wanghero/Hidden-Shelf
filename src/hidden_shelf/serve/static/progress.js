@@ -95,6 +95,9 @@
   var drawerOpen = false;
   var themeMenuOpen = false;
   var refs = {};
+  var sourcesInfo = null;        // GET /api/sources 的响应
+  var sourcesError = null;
+  var sourcesTimer = null;
 
   function api(method, path, body) {
     var options = { method: method, headers: { 'X-Shelf-Request': '1' } };
@@ -439,7 +442,7 @@
     refs.headSub = h('p', { class: 'page-sub' });
     page.appendChild(h('header', { class: 'page-head' }, h('div', null, h('h1', { class: 'page-title', text: t('page.title') }), refs.headSub)));
     var columns = h('div', { class: 'two-col' });
-    columns.appendChild(renderForm());
+    columns.appendChild(h('div', { class: 'stack' }, renderForm(), renderSourcesCard()));
     columns.appendChild(renderSteps());
     page.appendChild(columns);
     page.appendChild(renderLogCard());
@@ -447,6 +450,7 @@
     page.appendChild(refs.toasts);
     app.appendChild(h('main', { class: 'content' }, page));
     renderLogLines();
+    renderSourceRows();
     if (picker.open) buildPicker();
   }
 
@@ -497,6 +501,107 @@
         toggle('dryRun', 'form.dry_run', !!refs.dryRunValue),
         toggle('force', 'form.force', !!refs.forceValue)),
       h('div', { class: 'form-actions' }, refs.startButton, refs.openButton, refs.formNote));
+  }
+
+  /* ---------- 来源与登录 ---------- */
+  function loadSources() {
+    var root = refs.root ? refs.root.value.trim() : '';
+    return api('GET', '/api/sources' + (root ? '?root=' + encodeURIComponent(root) : '')).then(function (response) {
+      if (!response.ok) { sourcesError = response.data.error || ('HTTP ' + response.status); sourcesInfo = null; }
+      else { sourcesError = null; sourcesInfo = response.data; }
+      renderSourceRows();
+      scheduleSourcesPoll();
+    }).catch(function (error) { sourcesError = String(error && error.message || error); sourcesInfo = null; renderSourceRows(); });
+  }
+  /** 有登录在进行时每 2 秒刷一次，没有就不轮询。 */
+  function scheduleSourcesPoll() {
+    if (sourcesTimer) { clearTimeout(sourcesTimer); sourcesTimer = null; }
+    var running = sourcesInfo && sourcesInfo.sources.some(function (row) { return row.login.status === 'running'; });
+    if (running) sourcesTimer = setTimeout(loadSources, 2000);
+  }
+  function toggleSource(row, input) {
+    api('POST', '/api/sources', { name: row.name, enabled: input.checked }).then(function (response) {
+      if (!response.ok) { input.checked = !input.checked; toast('danger', t('sources.toggle.failed', { error: response.data.error || ('HTTP ' + response.status) })); }
+      else loadSources();
+    }).catch(function (error) { input.checked = !input.checked; toast('danger', t('toast.request.failed', { error: String(error && error.message || error) })); });
+  }
+  function startLogin(row) {
+    api('POST', '/api/login', { name: row.name }).then(function (response) {
+      if (!response.ok) toast('danger', t('sources.login.failed', { error: response.data.error || ('HTTP ' + response.status) }));
+      loadSources();
+    }).catch(function (error) { toast('danger', t('toast.request.failed', { error: String(error && error.message || error) })); });
+  }
+  function finishLogin(row) {
+    api('POST', '/api/login/finish', { name: row.name }).then(function () { loadSources(); });
+  }
+  function clearCooldown(row) {
+    var root = refs.root ? refs.root.value.trim() : '';
+    if (!root) { toast('warning', t('sources.cooldown.root')); return; }
+    api('POST', '/api/cooldown/clear', { root: root, name: row ? row.name : '' }).then(function (response) {
+      if (!response.ok) { toast('danger', response.data.error || ('HTTP ' + response.status)); return; }
+      var names = response.data.cleared || [];
+      toast(names.length ? 'success' : 'info', names.length ? t('sources.cooldown.cleared', { names: names.join(', ') }) : t('sources.cooldown.nothing'));
+      loadSources();
+    });
+  }
+  function cooldownText(iso) {
+    var d = new Date(iso);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var sameDay = d.toDateString() === new Date().toDateString();
+    return (sameDay ? '' : pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ') + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function renderSourcesCard() {
+    refs.sourcesBody = h('div', { class: 'sources', 'aria-live': 'polite' });
+    refs.sourcesHint = h('p', { class: 'sources-hint', hidden: true });
+    var refresh = h('button', { class: 'button secondary small', type: 'button', 'data-ripple': true, onclick: loadSources }, t('sources.refresh'));
+    return h('section', { class: 'card' },
+      h('div', { class: 'card-head' }, h('div', null, h('h2', { class: 'card-title', text: t('sources.title') }), h('p', { class: 'card-sub', text: t('sources.sub') })), refresh),
+      refs.sourcesBody, refs.sourcesHint);
+  }
+  function renderSourceRows() {
+    var body = refs.sourcesBody; if (!body) return;
+    clear(body);
+    if (sourcesError) {
+      body.appendChild(h('div', { class: 'state compact', role: 'alert' }, h('div', { class: 'state-icon danger' }, icon('alert')), h('h3', { class: 'state-title', text: t('sources.error', { error: sourcesError }) })));
+      return;
+    }
+    if (!sourcesInfo) {
+      body.appendChild(h('div', { class: 'skeleton-lines', 'aria-busy': 'true', 'aria-label': t('sources.loading') }, [50, 70, 40].map(function (w) { var sk = h('div', { class: 'skeleton' }); sk.style.width = w + '%'; return sk; })));
+      return;
+    }
+    sourcesInfo.sources.forEach(function (row) {
+      var input = h('input', { type: 'checkbox', 'aria-label': t('sources.enabled') + ' ' + row.label, onchange: function () { toggleSource(row, input); } });
+      input.checked = row.enabled;
+      var meta = [];
+      if (row.needs_login) meta.push(h('span', { class: 'pill ' + (row.cookie ? 'done' : ''), text: row.cookie ? t('sources.cookie.yes') : t('sources.cookie.no') }));
+      else meta.push(h('span', { class: 'pill', text: t('sources.cookie.none') }));
+      if (row.cooldown_until) meta.push(h('span', { class: 'pill skipped', text: t('sources.cooldown', { time: cooldownText(row.cooldown_until) }) }));
+      var actions = [];
+      var login = row.login || { status: 'idle', message: '' };
+      if (row.needs_login) {
+        if (login.status === 'running') {
+          actions.push(h('button', { class: 'button small', type: 'button', 'data-ripple': true, 'aria-busy': 'true', onclick: function () { finishLogin(row); } }, icon('loader'), h('span', { text: t('sources.login.finish') })));
+        } else {
+          actions.push(h('button', { class: 'button small' + (row.cookie ? ' secondary' : ''), type: 'button', 'data-ripple': true, disabled: !sourcesInfo.login_available, onclick: function () { startLogin(row); } }, t('sources.login')));
+        }
+      }
+      if (row.cooldown_until) actions.push(h('button', { class: 'button small secondary', type: 'button', 'data-ripple': true, onclick: function () { clearCooldown(row); } }, t('sources.cooldown.clear')));
+      var message = login.status === 'running' ? (login.message || t('sources.login.running')) : (login.status === 'done' || login.status === 'failed') ? login.message : '';
+      body.appendChild(h('div', { class: 'source-row', 'data-source': row.name },
+        h('label', { class: 'switch compact' }, input, h('span', { class: 'track', 'aria-hidden': 'true' })),
+        h('div', { class: 'source-main' }, h('div', { class: 'source-name', text: row.label }), h('div', { class: 'source-meta' }, meta),
+          message ? h('div', { class: 'source-message ' + login.status, text: message }) : null),
+        h('div', { class: 'source-actions' }, actions)));
+    });
+    refs.sourcesHint.hidden = sourcesInfo.login_available;
+    clear(refs.sourcesHint);
+    if (!sourcesInfo.login_available) {
+      refs.sourcesHint.appendChild(h('span', { text: t('sources.login.hint') + ' ' }));
+      String(sourcesInfo.login_hint || '').split('\n').slice(1).forEach(function (line, i) {
+        if (i) refs.sourcesHint.appendChild(h('span', { text: ' ' }));
+        refs.sourcesHint.appendChild(h('code', { text: line.trim() }));
+      });
+    }
   }
 
   function renderSteps() {
@@ -649,6 +754,7 @@
   buildShell();
   update();
   load();
+  loadSources();
   setInterval(function () { if (state.running && refs.root) update(); }, 1000);
   document.addEventListener('click', function () { if (themeMenuOpen) { themeMenuOpen = false; buildShell(); update(); } });
   document.addEventListener('keydown', function (e) {
