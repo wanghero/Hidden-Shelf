@@ -200,6 +200,20 @@ def test_javarchive_parse_rows_and_covers():
     assert archive(replaced(WORK_PAGE, ("标签：ハメ撮り｜素人｜爆乳", "标签：--")), "FC2-PPV-4137487")["genres"] == []
 
 
+def test_javarchive_title_unescapes_backslashes():
+    """本机真实冒烟（2026-10-29）：站上 `<h1>` 把括号写成 `\\(19\\)`，标题里不能留反斜杠。"""
+    escaped = r"みお\(19\)可愛い巨乳JDの初アナル貫通動画 \[完全版\] 50\%OFF"
+    body = replaced(WORK_PAGE, (f"<h1><a href=\"{ARCHIVE_LINK}\" title=\"FC2-PPV-4137487 {ARCHIVE_TITLE}\">FC2-PPV-4137487 {ARCHIVE_TITLE}</a></h1>",
+                                f"<h1>FC2-PPV-4137487 {escaped}</h1>"))
+    title = archive(body, "FC2-PPV-4137487")["title"]
+    assert "\\" not in title
+    assert title == "みお(19)可愛い巨乳JDの初アナル貫通動画 [完全版] 50%OFF"
+    # 日文的全角反斜杠与字母前的反斜杠不是转义，原样保留。
+    kept = replaced(WORK_PAGE, (f"<h1><a href=\"{ARCHIVE_LINK}\" title=\"FC2-PPV-4137487 {ARCHIVE_TITLE}\">FC2-PPV-4137487 {ARCHIVE_TITLE}</a></h1>",
+                                r"<h1>FC2-PPV-4137487 路径＼風 C:\new</h1>"))
+    assert archive(kept, "FC2-PPV-4137487")["title"] == r"路径＼風 C:\new"
+
+
 def test_javarchive_another_work_is_not_this_one():
     for body, code, wording in ((WORK_PAGE.replace(b"4137487", b"4364209"), "FC2-PPV-4137487", "JavArchive 上没有这个商品"),
                                 (b"<div class='news'></div>", "FC2-PPV-4137487", "JavArchive 上没有这个商品"),

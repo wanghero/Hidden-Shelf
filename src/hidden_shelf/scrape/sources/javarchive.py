@@ -35,6 +35,14 @@ _LINK = re.compile(r'href="(/\d+-[^"]+\.html)"')
 _COVER_SLOTS = ("div.fisrst_sc img[src]", 'img[itemprop="image"][src]')
 #: 多帧拼成的长条预览，正文里叫 `Preview(ビデオのサムネイル)`，不是封面。
 _PREVIEW = re.compile(r"_s\.(?:jpe?g|png)$", re.I)
+#: 转存者发帖时标题里的标点被反斜杠转义了（`みお\(19\)`、`\[完全版\]`），站方原样展示。只认反斜杠后跟 ASCII
+#: 标点的情形：日文的全角 `＼` 和 `C:\new` 这种字母前的反斜杠不是转义，不动。
+_ESCAPED_PUNCT = re.compile(r"\\([!-/:-@\[-`{-~])")
+
+
+def unescape_title(title: str) -> str:
+    """把 `\\(`、`\\)`、`\\[`、`\\]`、`\\\\` 这类反斜杠转义还原成原字。"""
+    return _ESCAPED_PUNCT.sub(r"\1", str(title or ""))
 #: 正文那块资料：`标签：A｜B｜C`、`日期：2023/11/21`、`时长：50:03`，每项后面跟一个 `<br>`。
 #: 只在 `div.news` 里搜：head 的 `<meta name="description">` 里有同样的字样，值被站方截断。
 _ROWS = {
@@ -110,15 +118,16 @@ class JavArchiveSource(SiteSource):
     def parse(self, page: Page, code: str) -> SiteRecord:
         """作品页 → 记录；对不上番号归 `not_found`。
 
-        标题以站内 `<h1>` 为准，开头那截番号剥掉。`<h1>` 里认不出这个商品号就当没有这一页。封面两个图位都收，
-        去重后 `div.fisrst_sc` 那张排前；`_s.jpg` 结尾的排除掉，那是多帧长条拼图。
+        标题以站内 `<h1>` 为准，先把发帖者留下的反斜杠转义还原，再把开头那截番号剥掉。`<h1>` 里认不出这个
+        商品号就当没有这一页。封面两个图位都收，去重后 `div.fisrst_sc` 那张排前；`_s.jpg` 结尾的排除掉，那是
+        多帧长条拼图。
         """
         wanted = video_id(code)
         if not wanted:
             raise unrecognised()
         soup = BeautifulSoup(page.text, "html.parser")
         heading = soup.select_one("h1")
-        title = text_of(heading)
+        title = unescape_title(text_of(heading))
         if not title or not _number(wanted).search(title):
             raise self._missing()
         link = heading.select_one("a[href]")
