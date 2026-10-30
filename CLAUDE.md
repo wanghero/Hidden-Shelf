@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 当前阶段（2026-10-29）
 
-- 状态：**v0.3.9，计划 1「本地流水线」、计划 2「联网刮削」、计划 3「进度网页」、计划 4「盘根目录鼠标选择」全部完成**（四份计划每个任务单独提交）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`，命令行 `shelf run` 与进度网页 `shelf serve` 跑同一个 `pipeline.run`，输出一致；拔网线照样跑通。
+- 状态：**v0.3.11，计划 1「本地流水线」、计划 2「联网刮削」、计划 3「进度网页」、计划 4「盘根目录鼠标选择」全部完成**（四份计划每个任务单独提交），之后两处用户直接要的小改：只读盘开跑前提示（v0.3.10）、海报墙横版封面 + 筛选右置（v0.3.11）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`，命令行 `shelf run` 与进度网页 `shelf serve` 跑同一个 `pipeline.run`，输出一致；拔网线照样跑通。
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
 - 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`；计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`；计划 3：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`；计划 4：`docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`（四份都已完成）。
 - 下一步没有已批准的计划。候选：跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
@@ -59,7 +59,8 @@ uv run shelf serve [--port 8031] [--no-browser]   # 进度网页：只监听 127
 - `asset.path` 是相对盘根目录的 POSIX 路径；`cover_file`/`poster_file`/`sheet_file` 相对 `.shelf/`。同番号多碟共用 `code_key`、封面与海报，九宫格每碟一张（`<番号>-cd<n>.jpg`）。
 - 归位是事务：备份库（保留 5 份）→ `os.rename` → 改库，改库失败把文件改回去；JSONL 批次日志可 `rollback_batch`；附属文件搬到 `.shelf/legacy/<番号>/`，未识别视频的附属文件跟着进 `未识别/`。只做同卷 rename，绝不删原始文件，绝不覆盖已存在的目标。
 - `field_owners`：每条记录有字段归属 JSON；`user:*`、`review:*` 的字段自动写入不许改；扫描写番号用 `scan:filename` + `require_empty`；联网来源写 `auto:<来源名>`。用户手改入口是 `.shelf/overrides.json`（`{"番号": {"title", "studio", "performers": [...], "tags": [...]}}`）。封面归属优先级：`auto:local`（本地旧封面）> 联网 `auto:<来源>` > `auto:frame`（抽帧兜底）。
-- 静态站从 `file://` 打开：数据只能是 `<script src>` 加载的 `.js`（`window.__shelf.{meta,works,entities,unrecognized}`，`works` 超 5 MB 分片成 `works-N.js`，`meta.dataFiles` 列全），不能 `fetch`；视频、图片相对路径，**不预先 URL 编码**，前端 `encodeMediaPath` 逐段编码；不加载外网资源（出处链接 `works[].sources` 是 `target=_blank` 外链，不是资源加载）。`entities.performers[].avatar` 指向 `.shelf/avatars/<id>.jpg`。前端是 hash 路由单页（`app.js`），纯逻辑在 `shelf-core.js`（UMD，node 可测）。
+- 静态站从 `file://` 打开：数据只能是 `<script src>` 加载的 `.js`（`window.__shelf.{meta,works,entities,unrecognized}`，`works` 超 5 MB 分片成 `works-N.js`，`meta.dataFiles` 列全），不能 `fetch`；视频、图片相对路径，**不预先 URL 编码**，前端 `encodeMediaPath` 逐段编码；不加载外网资源（出处链接 `works[].sources` 是 `target=_blank` 外链，不是资源加载）。`entities.performers[].avatar` 指向 `.shelf/avatars/<id>.jpg`。前端是 hash 路由单页（`app.js`），纯逻辑在 `shelf-core.js`（UMD，node 可测）。海报墙（用户 2026-10-30 定）：图集在左、筛选栏在右（`.wall-layout` 两列，手机上筛选用 `order:-1` 回到上面）；卡片用**横版官方封面** `works[].cover`（`.cover-wrap` 按 800×538），竖版 `poster` 只在没有封面时兜底，`poster_file` 照常生成。
+- 盘不可写（macOS 只读挂载的 NTFS 盘最常见）：`paths.check_writable` 在 `shelf run` 与 `POST /api/run` 开跑前先 `os.access`，写不了退出码 2 / 400，消息说明原因与怎么办（装 NTFS 驱动或改 exFAT/APFS、查写保护与权限）；`ShelfPaths.ensure` 把 `EROFS/EACCES/EPERM` 包成 `RootNotWritable` 同一句话。进度网页对第一步之前失败的运行显示「流水线没能开始：…」；目录选择器在 `writable=false` 的目录提示「此目录不可写」。
 - 前端外观按 `docs/ux-standard/SKILL.md`（`tokens.css` + `ripple.js` 复制到 `site/static/`），`app.css` 只用 token 变量（`grep -nE "#[0-9a-fA-F]{3,6}\b|rgb\(" app.css` 应无输出），浅/深/系统主题，中英双语（`i18n.js` 两套 key 必须一致）。
 - 测试永不联网：`tests/conftest.py` 的 autouse `isolated_home` 把全局配置落到临时目录并停用 8 站；要联网行为的测试自己传 `GlobalConfig()` 与假传输（`tests/test_scrape_run.py` 的 `replay`）。进度网页的测试用 `fastapi.testclient` 与 `tests/serve_fakes.py` 的假流水线；`TestClient` 提前关 SSE 流要等生成器下一次 yield，所以测试里 `ping_seconds` 设得很短。
 - 进度网页的取舍：进程内单运行，不做跨进程锁（网页与命令行同时跑同一盘不保护）；取消粒度是「步」；只有 `media` 等带 `[i/total]` 前缀的消息给得出百分比，其余步运行中显示条纹；无桌面环境 `webbrowser.open` 静默失败，`--no-browser` 可绕过。

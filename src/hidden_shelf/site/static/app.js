@@ -323,7 +323,7 @@
       h('header', { class: 'page-head' },
         h('div', null, h('h1', { class: 'page-title', text: title }), h('p', { class: 'page-sub tabular', text: t('list.count', { n: sorted.length }) })),
         h('div', { class: 'toolbar' }, h('div', { class: 'search-wrap' }, icon('search'), searchInput), sortSelect)),
-      h('div', { class: 'wall-layout' }, filterPanel, h('div', { class: 'wall-main' }, grid, pager)));
+      h('div', { class: 'wall-layout' }, h('div', { class: 'wall-main' }, grid, pager), filterPanel));
   }
 
   function hasFilters(state) {
@@ -348,11 +348,12 @@
   function renderCard(work) {
     var performers = (work.performers || []).slice(0, 3).map(function (id) { return names.performers[id]; }).filter(Boolean);
     var verdict = core.workPlayability(work, canPlayType);
+    // 图集用横版官方封面（cover），竖版海报（poster）只在没有封面时兜底。
     return h('a', { class: 'work-card card', href: '#/work/' + encodeURIComponent(work.id), 'data-ripple': true },
-      h('div', { class: 'poster-wrap' },
-        imageOrPlaceholder(work.poster || work.cover, work.code + ' ' + (work.title || ''), 'poster'),
-        h('div', { class: 'poster-badges' }, work.definition ? badge(work.definition, 'neutral') : null, badge(t('kind.' + (work.kind || 'other')), 'primary')),
-        (work.parts || []).length > 1 ? h('div', { class: 'poster-parts tabular', text: '×' + work.parts.length }) : null),
+      h('div', { class: 'cover-wrap' },
+        imageOrPlaceholder(work.cover || work.poster, work.code + ' ' + (work.title || ''), 'cover'),
+        h('div', { class: 'cover-badges' }, work.definition ? badge(work.definition, 'neutral') : null, badge(t('kind.' + (work.kind || 'other')), 'primary')),
+        (work.parts || []).length > 1 ? h('div', { class: 'cover-parts tabular', text: '×' + work.parts.length }) : null),
       h('div', { class: 'work-body' },
         h('div', { class: 'work-code mono', text: work.code }),
         h('div', { class: 'work-title', text: work.title || t('work.untitled'), title: work.title || '' }),
