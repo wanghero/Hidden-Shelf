@@ -14,9 +14,16 @@ from .db import normalize_name, strip_zero_width
 from .field_owners import owner_of
 
 #: 规范写法 → 各来源会给出的别名。只登记确认过的；加一家就在这里加一行。
+#: 无码片商一律用官网的英文名（用户 2026-10-30 定：カリビアンコム、一本道、天然むすめ、パコパコママ 都改英文）。
 STUDIO_CANONICAL: dict[str, tuple[str, ...]] = {
     "Caribbeancom": ("カリビアンコム", "Carib", "Caribbean", "Caribbeancom"),
     "Caribbeancompr": ("カリビアンコムプレミアム", "Caribbeancom Premium", "CaribbeancomPR", "Caribpr"),
+    "1pondo": ("一本道", "1pon", "1Pondo", "一本道 1pondo"),
+    "10musume": ("天然むすめ", "10mu", "10Musume", "天然素人"),
+    "Pacopacomama": ("パコパコママ", "paco", "PacoPacoMama"),
+    "Muramura": ("ムラムラってくる素人", "ムラムラ", "muramura"),
+    "Tokyo-Hot": ("東京熱", "Tokyo Hot", "TokyoHot", "東京熱 Tokyo-Hot"),
+    "HEYZO": ("Heyzo", "ヘイゾー"),
 }
 
 _ALIAS_INDEX: dict[str, str] = {}

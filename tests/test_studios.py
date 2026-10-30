@@ -23,8 +23,16 @@ from hidden_shelf.studios import canonical_studio, canonicalize_existing
     ("CARIBBEANCOM", "Caribbeancom"),
     ("カリビアンコムプレミアム", "Caribbeancompr"),
     ("Caribbeancom Premium", "Caribbeancompr"),
-    ("一本道", "一本道"),                      # 没登记的原样
-    ("Prestige", "Prestige"),
+    ("一本道", "1pondo"),
+    ("1pon", "1pondo"),
+    ("天然むすめ", "10musume"),
+    ("10mu", "10musume"),
+    ("パコパコママ", "Pacopacomama"),
+    ("ムラムラってくる素人", "Muramura"),
+    ("東京熱", "Tokyo-Hot"),
+    ("heyzo", "HEYZO"),
+    ("Prestige", "Prestige"),                 # 没登记的原样
+    ("MGS", "MGS"),
     ("", ""),
     (None, ""),
 ])

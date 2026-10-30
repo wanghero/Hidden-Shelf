@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 0.4.7 - 2026-10-30
+
+### 变更
+
+- 无码片商的厂牌全部统一成官网英文名：一本道 → 1pondo、天然むすめ → 10musume、パコパコママ → Pacopacomama、ムラムラってくる素人 → Muramura、東京熱 → Tokyo-Hot、heyzo → HEYZO（0.4.6 已改 Caribbeancom）。老库在下一次 `shelf run` 的导入步自动改名，归位把 `一本道/` 等目录搬到英文名下。
+
 ## 0.4.6 - 2026-10-30
 
 ### 变更
