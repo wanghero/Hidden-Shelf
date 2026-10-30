@@ -28,7 +28,7 @@ shelf run /path/to/disk --offline
 
 ## 日志
 
-`<盘根>/.shelf/logs/run-<时间>.log` 里相关的片段（去掉你不想公开的路径）：
+`<盘根>/HiddenShelf/logs/run-<时间>.log` 里相关的片段（去掉你不想公开的路径）：
 
 ```
 ```

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import __version__, pipeline
 from .config import ShelfConfig
-from .paths import SHELF_DIR, RootNotWritable, ShelfPaths, check_writable
+from .paths import SHELF_DIR, RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable
 
 COMMANDS = {
     "run": ("全流程：扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站", pipeline.STEPS),
@@ -123,7 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     root = root.resolve()
     try:
         check_writable(root)
-    except RootNotWritable as error:
+        check_layout(root)
+    except (RootNotWritable, ShelfLayoutConflict) as error:
         print(str(error), file=sys.stderr)
         return 2
     paths = ShelfPaths(root)

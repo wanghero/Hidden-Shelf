@@ -39,6 +39,16 @@ def test_show_hidden_includes_dot_dirs_but_never_shelf_or_system_dirs(tree: Path
     assert "file.txt" not in names
 
 
+def test_legacy_dot_shelf_counts_as_library_but_stays_hidden(tmp_path: Path):
+    """还没迁移的老盘只有 `.shelf/`：选择器照样标「已有库」，但 `.shelf` 本身永远不列。"""
+    disk = tmp_path / "old"
+    (disk / ".shelf").mkdir(parents=True)
+    (disk / "Prestige").mkdir()
+    listing = list_directory(str(disk), show_hidden=True)
+    assert listing.has_shelf is True
+    assert [e.name for e in listing.entries] == ["Prestige"]
+
+
 def test_symlinked_dirs_are_not_followed(tree: Path, tmp_path: Path):
     outside = tmp_path / "outside"
     outside.mkdir()

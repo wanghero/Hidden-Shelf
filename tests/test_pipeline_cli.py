@@ -161,3 +161,25 @@ def test_cli_dry_run_prints_summary(disk, capsys):
     assert "预演完成" in out and "没有动任何文件" in out and "plan-" in out
     assert "成品：" not in out
     assert not (disk / "Prestige").exists()
+
+
+def test_cli_both_dirs_exit_2(tmp_path: Path, capsys):
+    (tmp_path / ".shelf").mkdir()
+    (tmp_path / "HiddenShelf").mkdir()
+    assert cli.main(["scan", str(tmp_path)]) == 2
+    assert "同时有" in capsys.readouterr().err
+    assert (tmp_path / ".shelf").is_dir() and (tmp_path / "HiddenShelf").is_dir()
+
+
+def test_run_migrates_legacy_dir_and_logs(tmp_root: Path, fake_video):
+    """老盘：任何子命令开跑都先把 .shelf/ 改名，日志里记一行，之后一切照旧。"""
+    fake_video(tmp_root / "a" / "ABP-758.mp4")
+    (tmp_root / ".shelf" / "sources").mkdir(parents=True)
+    (tmp_root / ".shelf" / "marker.txt").write_text("old", encoding="utf-8")
+    result = pipeline.run(tmp_root, steps=("scan",))
+    assert result.ok
+    assert not (tmp_root / ".shelf").exists()
+    assert (tmp_root / SHELF_DIR / "marker.txt").read_text(encoding="utf-8") == "old"
+    assert result.log_path.is_relative_to(tmp_root / SHELF_DIR)
+    text = result.log_path.read_text(encoding="utf-8")
+    assert "已把 .shelf/ 改名为 HiddenShelf/" in text and "请重新出站" in text

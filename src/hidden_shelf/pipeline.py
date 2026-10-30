@@ -21,7 +21,7 @@ from .config import ShelfConfig
 from .local_import import import_local
 from .media import process_assets
 from .organize.apply import organize, preview_organize
-from .paths import ShelfPaths
+from .paths import LEGACY_SHELF_DIR, SHELF_DIR, ShelfPaths, migrate_legacy_dir
 from .scan import scan
 from .site.build import build_site
 
@@ -144,6 +144,8 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
     progress = progress or Progress()
     root = Path(root)
     paths = ShelfPaths(root)
+    # 老盘：先把 .shelf/ 改名，再建目录；`ensure()` 自己也会做，这里单独调一次是为了知道有没有改、好记日志。
+    migrated = migrate_legacy_dir(root)
     paths.ensure()
     config = config or ShelfConfig.load(paths)
     scrape_options = scrape_options or ScrapeOptions()
@@ -166,6 +168,10 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                 progress.advance(1, message)
 
             write(f"开始：{root}，步骤 {list(steps)}" + ("（预演）" if dry_run else ""))
+            if migrated:
+                note = f"已把 {LEGACY_SHELF_DIR}/ 改名为 {SHELF_DIR}/，请重新出站（shelf run 会自动做）"
+                write(note)
+                progress.log("info", note)
             for name in steps:
                 if cancel is not None and cancel():
                     result.cancelled = True

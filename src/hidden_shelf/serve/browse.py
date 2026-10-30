@@ -3,6 +3,7 @@
 规则：
 - `path` 必须是绝对路径，`..` 段拒绝；不存在 404、不是目录 400、无权限 403，其余 `OSError` 也按 403。
 - 默认不显示点开头的隐藏目录；资料目录 `HiddenShelf` 永远不显示（它是产物），但告诉前端该目录「已有藏片阁库」（`has_shelf`）。
+  还没迁移的老盘只有 `.shelf/`：同样算「已有库」，同样不显示。
 - 系统目录（群晖 `@eaDir`、Windows 回收站与卷信息、macOS 索引与废纸篓）永远不显示。
 - 单个子项 `stat` 失败就跳过那一项，不让整层失败（macOS `/Volumes` 里拔掉后残留的卷常这样）。
 - 最多 `MAX_ENTRIES` 条，超出截断并告知。
@@ -15,11 +16,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..paths import SHELF_DIR
+from ..paths import LEGACY_SHELF_DIR, SHELF_DIR
 
 MAX_ENTRIES = 2000
 #: 永远不显示的目录名（任何层级）。
-NEVER_SHOW = frozenset({SHELF_DIR, "@eaDir", "$RECYCLE.BIN", "System Volume Information", ".Spotlight-V100", ".Trashes", ".fseventsd"})
+NEVER_SHOW = frozenset({SHELF_DIR, LEGACY_SHELF_DIR, "@eaDir", "$RECYCLE.BIN", "System Volume Information", ".Spotlight-V100", ".Trashes", ".fseventsd"})
 #: 手动验证用的只读钩子：把 macOS 风格的卷目录指到别处（`HIDDEN_SHELF_VOLUMES=/tmp/卷`）。不写配置、不进文档以外的任何地方。
 VOLUMES_ENV = "HIDDEN_SHELF_VOLUMES"
 
@@ -52,7 +53,7 @@ class Listing:
 
 def _has_shelf(path: Path) -> bool:
     try:
-        return (path / SHELF_DIR).is_dir()
+        return (path / SHELF_DIR).is_dir() or (path / LEGACY_SHELF_DIR).is_dir()
     except OSError:
         return False
 

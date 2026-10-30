@@ -18,7 +18,7 @@ from .. import pipeline
 from ..config import ShelfConfig
 from ..fsutil import atomic_write_text
 from ..netconfig import home as config_home
-from ..paths import RootNotWritable, ShelfPaths, check_writable
+from ..paths import RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable
 from .events import Event, EventProgress, RunLog
 
 RECENT_LIMIT = 10
@@ -52,7 +52,8 @@ class RunOptions:
             raise ValueError(f"盘根目录不存在或不是目录：{raw_root}")
         try:
             check_writable(root)
-        except RootNotWritable as error:
+            check_layout(root)
+        except (RootNotWritable, ShelfLayoutConflict) as error:
             raise ValueError(str(error)) from None
         flags = {}
         for key, default in (("move_unrecognized", True), ("offline", False), ("force_scrape", False),

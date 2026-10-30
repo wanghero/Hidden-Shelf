@@ -14,6 +14,8 @@ from pathlib import Path, PurePosixPath
 #: 纯 ASCII、不以点或下划线开头、不是 Windows 保留名、不含尾随点或空格，exFAT/NTFS/APFS 都合法；
 #: 大小写不敏感的文件系统上 `hiddenshelf/` 视作同一目录。全仓库只在这里写死，别处一律引用它。
 SHELF_DIR = "HiddenShelf"
+#: 改名前的旧目录名（v0.4.0 及之前）。只在迁移代码里出现：老盘上见到它就改名成 `SHELF_DIR`。
+LEGACY_SHELF_DIR = ".shelf"
 #: 认不出番号的视频集中搬到这个目录（设置开关可关）。
 UNRECOGNIZED_DIR = "未识别"
 
@@ -87,7 +89,11 @@ class ShelfPaths:
         return self.root / "index.html"
 
     def ensure(self) -> None:
-        """建全部 `HiddenShelf/` 下的目录。`未识别/` 由归位按需建。盘不可写抛 `RootNotWritable`（带怎么办）。"""
+        """建全部 `HiddenShelf/` 下的目录。`未识别/` 由归位按需建。盘不可写抛 `RootNotWritable`（带怎么办）。
+
+        开头先把老盘的 `.shelf/` 改名（`migrate_legacy_dir`）；两个目录都在抛 `ShelfLayoutConflict`。
+        """
+        migrate_legacy_dir(self.root)
         for directory in (self.shelf, self.site, self.site_data, self.covers, self.posters,
                           self.sheets, self.avatars, self.sources, self.legacy, self.logs,
                           self.backups):
@@ -155,3 +161,37 @@ def check_writable(root: Path) -> None:
     """开跑之前先问一句能不能写，不动盘上任何东西；写不了抛 `RootNotWritable`。"""
     if not os.access(root, os.W_OK):
         raise RootNotWritable(root, errno.EROFS)
+
+
+class ShelfLayoutConflict(RuntimeError):
+    """盘根目录同时有旧的 `.shelf/` 和新的 `HiddenShelf/`（用户手工复制过）：不合并、不猜，让人保留一个。"""
+
+    def __init__(self, root: Path) -> None:
+        super().__init__(f"盘根目录同时有 {LEGACY_SHELF_DIR}/ 和 {SHELF_DIR}/，请保留一个再运行：{root}")
+
+
+def check_layout(root: Path) -> None:
+    """开跑之前只检查、不改名：两个资料目录都在就抛 `ShelfLayoutConflict`。"""
+    root = Path(root)
+    if (root / LEGACY_SHELF_DIR).is_dir() and (root / SHELF_DIR).is_dir():
+        raise ShelfLayoutConflict(root)
+
+
+def migrate_legacy_dir(root: Path) -> bool:
+    """老盘的 `.shelf/` 改名为 `HiddenShelf/`，同卷 `os.rename`、不碰内容；改了返回 True，没有旧目录返回 False。
+
+    两个都在抛 `ShelfLayoutConflict`；改名失败（只读盘、没权限）抛 `RootNotWritable` 同一句话。
+    库里的相对路径都相对资料目录，不用改库；旧 `index.html` 还指着 `.shelf/`，下一次出站会重写。
+    """
+    root = Path(root)
+    legacy = root / LEGACY_SHELF_DIR
+    if not legacy.is_dir():
+        return False
+    check_layout(root)
+    try:
+        os.rename(legacy, root / SHELF_DIR)
+    except OSError as error:
+        if error.errno in _NOT_WRITABLE_ERRNOS:
+            raise RootNotWritable(root, error.errno) from error
+        raise
+    return True

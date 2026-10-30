@@ -106,3 +106,42 @@ def test_shelf_dir_is_visible_ascii(tmp_path: Path):
     assert not SHELF_DIR.startswith((".", "_")) and SHELF_DIR.isascii()
     assert SHELF_DIR.upper() not in {"CON", "PRN", "AUX", "NUL"} and not SHELF_DIR.endswith((".", " "))
     assert ShelfPaths(tmp_path).shelf == tmp_path / "HiddenShelf"
+
+
+def test_ensure_migrates_legacy_dot_shelf(tmp_path: Path):
+    """老盘上的 `.shelf/` 自动改名为 `HiddenShelf/`，内容原样，用户什么都不用做。"""
+    from hidden_shelf.paths import migrate_legacy_dir
+    (tmp_path / ".shelf" / "covers").mkdir(parents=True)
+    (tmp_path / ".shelf" / "shelf.db").write_bytes(b"db")
+    paths = ShelfPaths(tmp_path)
+    paths.ensure()
+    assert not (tmp_path / ".shelf").exists()
+    assert (tmp_path / "HiddenShelf" / "shelf.db").read_bytes() == b"db"
+    assert (tmp_path / "HiddenShelf" / "covers").is_dir()
+    # 再来一次没有旧目录：返回 False，不抛。
+    assert migrate_legacy_dir(tmp_path) is False
+
+
+def test_migrate_returns_true_once(tmp_path: Path):
+    from hidden_shelf.paths import migrate_legacy_dir
+    assert migrate_legacy_dir(tmp_path) is False
+    (tmp_path / ".shelf").mkdir()
+    assert migrate_legacy_dir(tmp_path) is True
+    assert (tmp_path / "HiddenShelf").is_dir() and not (tmp_path / ".shelf").exists()
+
+
+def test_ensure_refuses_both_dirs(tmp_path: Path):
+    """两个目录都在（用户手工复制过）：不合并、不猜，报错让人保留一个。"""
+    from hidden_shelf.paths import ShelfLayoutConflict, check_layout
+    (tmp_path / ".shelf").mkdir()
+    (tmp_path / "HiddenShelf").mkdir()
+    with pytest.raises(ShelfLayoutConflict, match="同时有"):
+        ShelfPaths(tmp_path).ensure()
+    with pytest.raises(ShelfLayoutConflict, match="同时有"):
+        check_layout(tmp_path)
+    # 两个目录都原样留着。
+    assert (tmp_path / ".shelf").is_dir() and (tmp_path / "HiddenShelf").is_dir()
+    # 只有旧目录时 check_layout 只检查、不改名。
+    (tmp_path / "HiddenShelf").rmdir()
+    check_layout(tmp_path)
+    assert (tmp_path / ".shelf").is_dir()
