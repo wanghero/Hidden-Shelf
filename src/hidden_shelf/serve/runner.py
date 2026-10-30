@@ -38,6 +38,8 @@ class RunOptions:
     force_scrape: bool = False
     #: 只预演：归位只列清单，媒体与出站跳过，`HiddenShelf/` 之外不动。
     dry_run: bool = False
+    #: 封面与九宫格复制到视频所在目录；None 表示按盘上配置，给了就写进盘上配置（它是盘的设置，不是一次性的）。
+    images_in_work_dir: bool | None = None
     steps: tuple[str, ...] = pipeline.STEPS
 
     @classmethod
@@ -63,6 +65,10 @@ class RunOptions:
             if not isinstance(value, bool):
                 raise ValueError(f"{key} 要是 true 或 false")
             flags[key] = value
+        images = data.get("images_in_work_dir")
+        if images is not None and not isinstance(images, bool):
+            raise ValueError("images_in_work_dir 要是 true 或 false")
+        flags["images_in_work_dir"] = images
         steps = data.get("steps", list(pipeline.STEPS))
         if not isinstance(steps, list) or not steps or any(step not in pipeline.STEPS for step in steps):
             raise ValueError(f"步骤只能是 {'、'.join(pipeline.STEPS)} 的子集")
@@ -71,7 +77,8 @@ class RunOptions:
 
     def to_dict(self) -> dict:
         return {"root": str(self.root), "move_unrecognized": self.move_unrecognized, "offline": self.offline,
-                "force_scrape": self.force_scrape, "dry_run": self.dry_run, "steps": list(self.steps)}
+                "force_scrape": self.force_scrape, "dry_run": self.dry_run, "images_in_work_dir": self.images_in_work_dir,
+                "steps": list(self.steps)}
 
 
 def _plain(value: Any) -> Any:
@@ -178,6 +185,9 @@ class RunManager:
             paths.ensure()
             config = ShelfConfig.load(paths)
             config.move_unrecognized = options.move_unrecognized
+            if options.images_in_work_dir is not None and options.images_in_work_dir != config.images_in_work_dir:
+                config.images_in_work_dir = options.images_in_work_dir
+                config.save(paths)
             scrape_options = pipeline.ScrapeOptions(offline=options.offline, force=options.force_scrape)
             result = self.run_pipeline(options.root, config=config, steps=options.steps, progress=EventProgress(log),
                                        scrape_options=scrape_options, cancel=self._cancel.is_set,

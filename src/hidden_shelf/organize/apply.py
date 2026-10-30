@@ -169,14 +169,16 @@ def _move_sidecars(connection, paths, asset_id: int, video_target: str, log) -> 
     asset = connection.execute("SELECT code_key FROM asset WHERE id=?", (asset_id,)).fetchone()
     code_key = asset["code_key"] if asset else None
     sidecars = connection.execute(
-        "SELECT id,path,kind FROM sidecar WHERE asset_id=? AND status<>'moved' ORDER BY path", (asset_id,)).fetchall()
+        "SELECT id,path,kind,status FROM sidecar WHERE asset_id=? AND status<>'moved' ORDER BY path", (asset_id,)).fetchall()
     for sidecar in sidecars:
         source = paths.absolute(sidecar["path"])
         if not source.is_file():
             continue
-        if code_key:
+        placed = sidecar["status"] == "placed"
+        if code_key and not placed:
             directory = paths.legacy / code_key
         else:
+            # 没番号的附属文件、以及程序自己放在视频旁的图片副本（`placed`），都跟着视频进新目录。
             directory = paths.absolute(video_target).parent
         directory.mkdir(parents=True, exist_ok=True)
         destination = _free_name(directory, source.name)
@@ -188,6 +190,11 @@ def _move_sidecars(connection, paths, asset_id: int, video_target: str, log) -> 
         except OSError as error:
             log({"kind": "sidecar", "sidecar_id": sidecar["id"], "from": sidecar["path"], "to": new_rel,
                  "ok": False, "error": str(error)})
+            continue
+        if placed:
+            connection.execute("UPDATE sidecar SET path=? WHERE id=?", (new_rel, sidecar["id"]))
+            log({"kind": "sidecar", "sidecar_id": sidecar["id"], "from": sidecar["path"], "to": new_rel, "ok": True,
+                 "placed": True})
             continue
         connection.execute("UPDATE sidecar SET status='moved', moved_to=? WHERE id=?", (new_rel, sidecar["id"]))
         log({"kind": "sidecar", "sidecar_id": sidecar["id"], "from": sidecar["path"], "to": new_rel, "ok": True})
@@ -327,7 +334,9 @@ def rollback_batch(connection: sqlite3.Connection, paths: ShelfPaths, batch_log:
             _rename(paths, entry["to"], entry["from"])
         except OSError:
             continue
-        if entry.get("kind") == "sidecar":
+        if entry.get("kind") == "sidecar" and entry.get("placed"):
+            connection.execute("UPDATE sidecar SET path=? WHERE id=?", (entry["from"], entry["sidecar_id"]))
+        elif entry.get("kind") == "sidecar":
             connection.execute("UPDATE sidecar SET status='pending', moved_to=NULL WHERE id=?",
                                (entry["sidecar_id"],))
         elif entry.get("kind") == "asset":

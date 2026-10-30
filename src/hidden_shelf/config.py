@@ -24,6 +24,8 @@ class ShelfConfig:
     language: str = "zh"
     #: 是否联网刮削（计划 2）。关掉就只走本地流水线。
     scrape: bool = True
+    #: 把封面与九宫格复制一份到视频所在目录（`<番号>-cover.jpg`、`<主名>-sheet.jpg`；计划 9）。默认不放。
+    images_in_work_dir: bool = False
 
     @classmethod
     def load(cls, paths: ShelfPaths) -> "ShelfConfig":

@@ -31,6 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
         sub = subparsers.add_parser(name, help=help_text, description=help_text)
         sub.add_argument("root", help="盘根目录")
         sub.add_argument("--no-move-unrecognized", action="store_true", help="本次不把认不出番号的视频搬到 未识别/")
+        sub.add_argument("--images-in-work-dir", action=argparse.BooleanOptionalAction, default=None,
+                         help="把封面与九宫格复制一份到视频所在目录（--no-images-in-work-dir 收回副本）；不写则按盘上配置")
         sub.add_argument("--dir-template", help="本次使用的目录模板，如 {studio}/{code}")
         sub.add_argument("--file-template", help="本次使用的文件名模板，如 {code}[-cd{cd}]")
         sub.add_argument("--language", choices=("zh", "en"), help="站点默认语言")
@@ -178,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     config = ShelfConfig.load(paths)
     if args.no_move_unrecognized:
         config.move_unrecognized = False
+    if args.images_in_work_dir is not None:
+        config.images_in_work_dir = args.images_in_work_dir
     if args.dir_template is not None:
         config.dir_template = args.dir_template
     if args.file_template is not None:

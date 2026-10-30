@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 1.4.1 - 2026-10-30
+
+### 新增
+
+- 新选项「封面与九宫格复制一份到视频所在目录」（盘上配置 `images_in_work_dir`，命令行 `--images-in-work-dir` / `--no-images-in-work-dir`，进度网页一个开关）：开了之后媒体步末尾把 `HiddenShelf/covers/<番号>.jpg` 复制成 `<番号>-cover.jpg`、九宫格复制成 `<视频主名>-sheet.jpg` 放在视频旁边；副本由程序自己认领（`sidecar` 表 `placed`），扫描不会把它当成待导入的本地封面，归位时跟着视频进新目录，关掉选项时只收回这些副本，用户自己的图片不碰。默认关，真相仍在 `HiddenShelf/`。
+
 ## 1.4.0 - 2026-10-30
 
 版本号按用户要求从 1.4.x 起（之后每个任务 +0.0.1）。

@@ -103,7 +103,7 @@ def test_cli_version(capsys):
     with pytest.raises(SystemExit) as caught:
         cli.main(["--version"])
     assert caught.value.code == 0
-    assert "shelf 0." in capsys.readouterr().out
+    assert "shelf 1." in capsys.readouterr().out
 
 
 def test_cli_readonly_root_exit_2_with_hint(tmp_path: Path, capsys, monkeypatch):

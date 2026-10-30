@@ -149,6 +149,7 @@ uv run shelf login javdb      # 弹出浏览器，登录完关掉窗口或按回
 - **换台电脑能看吗？** 能。站点里全是相对路径，盘插哪台机器都一样。
 - **文件名不是番号怎么办？** 默认搬到 `未识别/`（保留原目录层级），站点里单独列出；`--no-move-unrecognized` 可以让它们原地不动。
 - **以前刮削器留下的 NFO 和封面？** 先导入，再搬到 `HiddenShelf/legacy/<番号>/` 留底，媒体目录旁不再留附属文件。
+- **想在视频旁边直接看到封面和九宫格？** 开 `images_in_work_dir`（命令行 `--images-in-work-dir`，或进度网页的开关）：程序把 `HiddenShelf/` 里的封面与九宫格复制一份到视频所在目录（`<番号>-cover.jpg`、`<主名>-sheet.jpg`），归位时跟着走，关掉选项就收回，你自己放的图片不碰。
 - **作品文件夹里还有截图、说明之类的零散文件？** 文件夹名里带着这个番号的，算作品自己的文件夹，里面顶层的零散文件跟着视频一起进新目录，名字不变；子目录不动。预演清单里以 `EXTRA` 行列出。
 - **搬错了怎么回滚？** 每批有 `HiddenShelf/logs/organize-<时间>.jsonl`。目前要在 Python 里调 `hidden_shelf.organize.apply.rollback_batch(connection, paths, 日志路径)`，命令行入口还没有。
 - **javdb 要登录？** 浏览器登录后把 Cookie 请求头贴进全局配置的 `sources.javdb.cookie`。

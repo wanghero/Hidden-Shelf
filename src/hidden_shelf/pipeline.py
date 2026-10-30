@@ -20,6 +20,7 @@ from . import db
 from .config import ShelfConfig
 from .local_import import import_local
 from .media import process_assets
+from .media.place import place_images
 from .organize.apply import organize, preview_organize
 from .paths import LEGACY_SHELF_DIR, SHELF_DIR, ShelfPaths, migrate_legacy_dir
 from .scan import scan
@@ -240,7 +241,9 @@ def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, confi
         stats["rescan"] = _stats(rescan)
         return stats
     if name == "media":
-        return _stats(process_assets(connection, paths, progress=emit))
+        stats = _stats(process_assets(connection, paths, progress=emit))
+        stats["placed"] = _stats(place_images(connection, paths, config, progress=emit))
+        return stats
     if name == "build":
         return _stats(build_site(connection, paths, config, progress=emit))
     raise ValueError(name)

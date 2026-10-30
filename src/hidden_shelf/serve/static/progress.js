@@ -191,7 +191,7 @@
     showFieldError('');
     starting = true;
     update();
-    api('POST', '/api/run', { root: root, move_unrecognized: refs.move.checked, offline: refs.offline.checked, force_scrape: refs.force.checked, dry_run: refs.dryRun.checked })
+    api('POST', '/api/run', { root: root, move_unrecognized: refs.move.checked, offline: refs.offline.checked, force_scrape: refs.force.checked, dry_run: refs.dryRun.checked, images_in_work_dir: refs.images.checked })
       .then(function (response) {
         starting = false;
         if (response.status === 202) {
@@ -499,7 +499,8 @@
         toggle('move', 'form.move', refs.moveValue == null ? true : refs.moveValue),
         toggle('offline', 'form.offline', !!refs.offlineValue),
         toggle('dryRun', 'form.dry_run', !!refs.dryRunValue),
-        toggle('force', 'form.force', !!refs.forceValue)),
+        toggle('force', 'form.force', !!refs.forceValue),
+        toggle('images', 'form.images', !!refs.imagesValue)),
       h('div', { class: 'form-actions' }, refs.startButton, refs.openButton, refs.formNote));
   }
 
@@ -690,8 +691,8 @@
     recentRoots.forEach(function (root) { refs.recent.appendChild(h('option', { value: root })); });
     if (!refs.rootValue && !refs.root.value) refs.root.value = state.root || recentRoots[0] || '';
     var busy = state.running || starting;
-    [refs.root, refs.move, refs.offline, refs.dryRun, refs.force].forEach(function (input) { input.disabled = busy; });
-    refs.moveValue = refs.move.checked; refs.offlineValue = refs.offline.checked; refs.forceValue = refs.force.checked; refs.dryRunValue = refs.dryRun.checked;
+    [refs.root, refs.move, refs.offline, refs.dryRun, refs.force, refs.images].forEach(function (input) { input.disabled = busy; });
+    refs.moveValue = refs.move.checked; refs.offlineValue = refs.offline.checked; refs.forceValue = refs.force.checked; refs.dryRunValue = refs.dryRun.checked; refs.imagesValue = refs.images.checked;
     clear(refs.startButton);
     refs.startButton.className = 'button large' + (state.running ? ' secondary' : '');
     refs.startButton.setAttribute('aria-busy', starting ? 'true' : 'false');
