@@ -43,8 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--verbose", "-v", action="store_true", help="打印更多日志")
     config_cmd = subparsers.add_parser("config", help="打印全局配置位置、代理模式、各站 Cookie 有无与冷却状态（不打印 Cookie 值）")
     config_cmd.add_argument("root", nargs="?", help="盘根目录（给出时一并打印该盘的来源冷却状态）")
-    login_cmd = subparsers.add_parser("login", help="弹出浏览器登录来源站（javdb、javbus、avbase），把 Cookie 存进全局配置")
-    login_cmd.add_argument("source", help="来源名：javdb、javbus 或 avbase")
+    login_cmd = subparsers.add_parser("login", help="弹出浏览器登录来源站（javdb、javbus），把 Cookie 存进全局配置")
+    login_cmd.add_argument("source", help="来源名：javdb 或 javbus")
     serve_cmd = subparsers.add_parser("serve", help="起进度网页（只监听 127.0.0.1，默认端口 8031）并打开浏览器")
     serve_cmd.add_argument("--port", type=int, help="指定端口；被占就报错退出，不自动换口")
     serve_cmd.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
@@ -82,7 +82,7 @@ def _serve(args) -> int:
 
 def _print_config(root: str | None) -> int:
     from .netconfig import GlobalConfig, config_path
-    from .scrape.access import SOURCES, Cooldown
+    from .scrape.access import FINGERPRINT_SOURCES, SOURCES, Cooldown, fingerprint_available
 
     config = GlobalConfig.load()
     summary = config.describe()
@@ -92,7 +92,9 @@ def _print_config(root: str | None) -> int:
     for name, spec in SOURCES.items():
         item = summary["sources"].get(name, {"enabled": True, "cookie": False})
         state = "启用" if item["enabled"] else "停用"
-        cookie = ("，Cookie：有" if item["cookie"] else "，Cookie：无") if (spec.get("cookie") or name == "avbase") else ""
+        cookie = ("，Cookie：有" if item["cookie"] else "，Cookie：无") if spec.get("cookie") else ""
+        if name in FINGERPRINT_SOURCES:
+            cookie += "，浏览器指纹：" + ("已装 curl_cffi" if fingerprint_available() else "未装 curl_cffi（uv sync --extra fingerprint）")
         print(f"  {name:<11}{spec['label']:<12}{state}{cookie}")
     if summary["routes"]:
         print("来源链覆盖：" + json.dumps(summary["routes"], ensure_ascii=False))

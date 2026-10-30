@@ -123,7 +123,10 @@
     'sources.enabled': '启用',
     'sources.toggle.failed': '开关没改成：{error}',
     'sources.login.failed': '登录没开始：{error}',
-    'sources.login.saved': '{label}：{message}'
+    'sources.login.saved': '{label}：{message}',
+    'sources.fingerprint.yes': '已模拟浏览器指纹',
+    'sources.fingerprint.no': '要装 curl_cffi 才能过 Cloudflare',
+    'sources.fingerprint.hint': 'AVBase 过 Cloudflare 要装：'
   };
   var en = {
     'app.name': 'Hidden Shelf',
@@ -245,7 +248,10 @@
     'sources.enabled': 'Enabled',
     'sources.toggle.failed': 'Switch not saved: {error}',
     'sources.login.failed': 'Sign-in did not start: {error}',
-    'sources.login.saved': '{label}: {message}'
+    'sources.login.saved': '{label}: {message}',
+    'sources.fingerprint.yes': 'Browser fingerprint on',
+    'sources.fingerprint.no': 'Needs curl_cffi to pass Cloudflare',
+    'sources.fingerprint.hint': 'AVBase needs this to pass Cloudflare:'
   };
   return { zh: zh, en: en };
 });

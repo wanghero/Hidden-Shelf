@@ -20,7 +20,7 @@ import httpx
 
 from ..fsutil import atomic_write_text
 from ..netconfig import GlobalConfig
-from .transport import USER_AGENT, HostLimiter, HttpRequest, HttpResponse, HttpxTransport, host_under
+from .transport import USER_AGENT, CurlTransport, HostLimiter, HttpRequest, HttpResponse, HttpxTransport, host_under
 
 #: 8 站的登记。`cookie`：请求要带用户贴的 Cookie；`blocked_pause`：403 冷却的上限（秒），没登记的站 403 只报错不冷却。
 SOURCES: dict[str, dict] = {
@@ -41,6 +41,16 @@ SOURCES: dict[str, dict] = {
     "avbase": {"label": "AVBase", "domains": ("avbase.net",), "login": "https://www.avbase.net/",
                "blocked_pause": 6 * 3600},
 }
+
+#: 靠 TLS 指纹放行的站：Cloudflare 对 httpx 的指纹直接 403，`curl_cffi` 模拟 Chrome 指纹不带 Cookie 就过
+#: （2026-10-30 本机实测 avbase：httpx 403、curl_cffi 200；把浏览器里抓来的 cf_clearance 带上反而撞验证，
+#: 所以这几站不带用户 Cookie）。没装 `curl_cffi`（`uv sync --extra fingerprint`）就退回 httpx，照旧会冷却。
+FINGERPRINT_SOURCES = frozenset({"avbase"})
+
+
+def fingerprint_available() -> bool:
+    return CurlTransport.available()
+
 
 #: 撞上拒绝访问后第一次停多久。`blocked_pause` 是上限，不是首停时长：那几家按出口 IP 计的封，
 #: 实际封期常常远短于上限（peach 2026-09-22 实测 javdb 记下 24 小时只走了 6.6 小时）。
@@ -209,7 +219,10 @@ class SourceTransport:
         blocked_pause = SOURCES.get(source or "", {}).get("blocked_pause")
         if response.status == 403 and blocked_pause:
             self.cooldown.pause(key, action="blocked")
-            hint = "；请在全局配置里更新它的 Cookie" if SOURCES[source].get("cookie") else ""
+            if source in FINGERPRINT_SOURCES and not CurlTransport.available():
+                hint = "；装上 curl_cffi 模拟浏览器指纹就能过（uv sync --extra fingerprint）"
+            else:
+                hint = "；请在全局配置里更新它的 Cookie" if SOURCES[source].get("cookie") else ""
             raise SourcePaused(f"来源 {key} 拒绝访问，暂停向它请求一段时间{hint}")
         if response.status < 400 and self.cooldown.blocks(key):
             # 这一趟通了，封已经解除：清掉记录，下次撞上从最短的一档重新起算。
@@ -230,8 +243,10 @@ class SourceTransport:
             options.pop("proxy", None)
             options["trust_env"] = False
             options["transport"] = self.httpx_transport
-        # 配置里有这一站的 Cookie 就带（不只登记了 `cookie: True` 的站：avbase 过了 Cloudflare 验证也是一份 Cookie），
-        # 有登录时记下的 UA 就用那个 UA——放行 Cookie 绑 UA，换了串等于没登录。
+        if source in FINGERPRINT_SOURCES and self.httpx_transport is None and CurlTransport.available():
+            return CurlTransport(client_options=options)
+        # 配置里有这一站的 Cookie 就带（不只登记了 `cookie: True` 的站），有登录时记下的 UA 就用那个 UA——
+        # 登录态的 Cookie 绑 UA，换了串等于没登录。
         cookies = None
         if source and self.config.cookie(source):
             cookies = cookie_jar(self.config.cookie(source), source)

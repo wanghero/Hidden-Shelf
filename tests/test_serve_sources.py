@@ -28,6 +28,7 @@ def home(tmp_path: Path, monkeypatch):
 
 
 def make(tmp_path: Path, **panel_options):
+    panel_options.setdefault("fingerprint", lambda: False)
     panel = SourcePanel(**panel_options)
     app = create_app(RunManager(home=tmp_path / "serve-home", run_pipeline=fake_pipeline()), panel=panel, ping_seconds=0.05)
     client = TestClient(app)
@@ -53,11 +54,13 @@ def test_sources_list_hides_values_and_shows_cooldown(home: Path, tmp_path: Path
     assert client.get("/api/sources").status_code == 403, "GET /api/sources 也要同源头"
     body = client.get("/api/sources", params={"root": str(tmp_root)}, headers=HEADERS).json()
     assert "secret" not in json.dumps(body) and body["login_available"] is True and body["login_hint"] == ""
+    assert body["fingerprint_available"] is False and "extra fingerprint" in body["fingerprint_hint"]
     rows = {r["name"]: r for r in body["sources"]}
     assert [r["name"] for r in body["sources"]][:3] == ["javdb", "javbus", "avbase"], "可登录的排前面"
-    assert rows["javdb"] == {"name": "javdb", "label": "JavDB", "enabled": True, "needs_login": True, "cookie": True,
-                             "user_agent": True, "cooldown_until": None, "login": {"status": "idle", "message": ""}}
+    assert rows["javdb"] == {"name": "javdb", "label": "JavDB", "enabled": True, "needs_login": True, "needs_fingerprint": False,
+                             "cookie": True, "user_agent": True, "cooldown_until": None, "login": {"status": "idle", "message": ""}}
     assert rows["avbase"]["enabled"] is False and rows["avbase"]["cooldown_until"] is not None
+    assert rows["avbase"]["needs_login"] is False and rows["avbase"]["needs_fingerprint"] is True
     assert rows["r18dev"]["needs_login"] is False and rows["r18dev"]["cookie"] is False
     assert rows["javdb"]["cooldown_until"] is None
 
@@ -110,7 +113,7 @@ def test_login_unavailable_and_unknown_source(home: Path, tmp_path: Path):
     response = client.post("/api/login", json={"name": "javdb"}, headers=HEADERS)
     assert response.status_code == 400 and "uv sync --extra login" in response.json()["error"]
     client = make(tmp_path, availability=lambda: "")
-    assert client.post("/api/login", json={"name": "r18dev"}, headers=HEADERS).status_code == 400
+    assert client.post("/api/login", json={"name": "avbase"}, headers=HEADERS).status_code == 400
 
 
 def test_clear_cooldown(home: Path, tmp_path: Path, tmp_root: Path):

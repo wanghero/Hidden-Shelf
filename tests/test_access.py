@@ -248,8 +248,8 @@ def test_a_nested_query_counts_one_failure_once(tmp_path: Path):
 
 
 def test_source_transport_uses_saved_user_agent_and_cookie_for_any_source(tmp_path: Path):
-    """登录抓来的 Cookie 绑着那个浏览器的 UA（Cloudflare 的 cf_clearance 尤其如此）：有 UA 就用它；
-    avbase 没登记 cookie: True，但用户登录过就照样带。"""
+    """登录抓来的 Cookie 绑着那个浏览器的 UA：有 UA 就用它；没登记 cookie: True 的站有 Cookie 也照样带
+    （这里 avbase 没装 curl_cffi，走 httpx 这条）。"""
     seen = []
 
     def handler(request):
@@ -265,4 +265,31 @@ def test_source_transport_uses_saved_user_agent_and_cookie_for_any_source(tmp_pa
     transport(HttpRequest("GET", "https://javdb.com/v/1", {}, None), 5.0, 100)
     assert seen[0][1] == "cf_clearance=zzz" and seen[0][2] == "Mozilla/5.0 Mine"
     assert seen[1][1] == "session=abc" and seen[1][2] == USER_AGENT
+    transport.close()
+
+
+def test_fingerprint_source_uses_curl_transport_without_cookies(tmp_path: Path, monkeypatch):
+    """avbase 的 Cloudflare 看 TLS 指纹：装了 curl_cffi 就走 CurlTransport，且不带用户 Cookie（带了反而撞验证）。"""
+    from hidden_shelf.scrape import access
+
+    made = []
+
+    class FakeCurl:
+        def __init__(self, *, impersonate="chrome", client_options=None):
+            made.append((impersonate, client_options))
+        @staticmethod
+        def available():
+            return True
+        def __call__(self, request, timeout, max_bytes):
+            return HttpResponse(200, {}, b"ok", request.url)
+        def close(self):
+            pass
+    monkeypatch.setattr(access, "CurlTransport", FakeCurl)
+    config = GlobalConfig(network_mode="direct", sources={"avbase": SourceSettings(cookie="cf_clearance=zzz", user_agent="UA")})
+    transport = SourceTransport(Cooldown(tmp_path / "_cooldown.json"), config, limiter=HostLimiter({}, default=0.0, sleep=lambda s: None))
+    response = transport(HttpRequest("GET", "https://www.avbase.net/works?q=x", {}, None), 5.0, 100)
+    assert response.status == 200 and made == [("chrome", {"trust_env": False})]
+    assert isinstance(transport.transports["avbase"], FakeCurl)
+    # javdb 不在指纹名单里，照旧 httpx。
+    assert "javdb" not in transport.transports
     transport.close()

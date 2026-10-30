@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 0.4.17 - 2026-10-30
+
+### 修复
+
+- AVBase 的 403 不是缺 Cookie，是 Cloudflare 认 TLS 指纹：装了 `curl_cffi`（`uv sync --extra fingerprint`）就走模拟 Chrome 指纹的传输，不带 Cookie 直接通过（本机实测 httpx 403、curl_cffi 200；带浏览器抓来的 cf_clearance 反而撞验证）。项目里早有的 `CurlTransport` 这回接上了线。`shelf login` 与网页「登录」因此只留 javdb、javbus；AVBase 那行改显示「已模拟浏览器指纹 / 要装 curl_cffi」，403 的提示也改成装 curl_cffi。
+
 ## 0.4.16 - 2026-10-30
 
 ### 新增

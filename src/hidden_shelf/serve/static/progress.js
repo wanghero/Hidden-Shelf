@@ -574,6 +574,7 @@
       input.checked = row.enabled;
       var meta = [];
       if (row.needs_login) meta.push(h('span', { class: 'pill ' + (row.cookie ? 'done' : ''), text: row.cookie ? t('sources.cookie.yes') : t('sources.cookie.no') }));
+      else if (row.needs_fingerprint) meta.push(h('span', { class: 'pill ' + (sourcesInfo.fingerprint_available ? 'done' : 'failed'), text: sourcesInfo.fingerprint_available ? t('sources.fingerprint.yes') : t('sources.fingerprint.no') }));
       else meta.push(h('span', { class: 'pill', text: t('sources.cookie.none') }));
       if (row.cooldown_until) meta.push(h('span', { class: 'pill skipped', text: t('sources.cooldown', { time: cooldownText(row.cooldown_until) }) }));
       var actions = [];
@@ -593,14 +594,18 @@
           message ? h('div', { class: 'source-message ' + login.status, text: message }) : null),
         h('div', { class: 'source-actions' }, actions)));
     });
-    refs.sourcesHint.hidden = sourcesInfo.login_available;
+    refs.sourcesHint.hidden = sourcesInfo.login_available && sourcesInfo.fingerprint_available;
     clear(refs.sourcesHint);
     if (!sourcesInfo.login_available) {
-      refs.sourcesHint.appendChild(h('span', { text: t('sources.login.hint') + ' ' }));
+      var loginLine = h('div', null, h('span', { text: t('sources.login.hint') + ' ' }));
       String(sourcesInfo.login_hint || '').split('\n').slice(1).forEach(function (line, i) {
-        if (i) refs.sourcesHint.appendChild(h('span', { text: ' ' }));
-        refs.sourcesHint.appendChild(h('code', { text: line.trim() }));
+        if (i) loginLine.appendChild(h('span', { text: ' ' }));
+        loginLine.appendChild(h('code', { text: line.trim() }));
       });
+      refs.sourcesHint.appendChild(loginLine);
+    }
+    if (!sourcesInfo.fingerprint_available) {
+      refs.sourcesHint.appendChild(h('div', null, h('span', { text: t('sources.fingerprint.hint') + ' ' }), h('code', { text: sourcesInfo.fingerprint_hint || '' })));
     }
   }
 

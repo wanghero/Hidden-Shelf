@@ -93,10 +93,10 @@ Credentials live only there: never in any file on the disk, never in logs, never
 If you would rather not copy cookies by hand, sign in through a browser: install Playwright once (`uv sync --extra login`, then `uv run playwright install chromium`) and run
 
 ```bash
-uv run shelf login javdb      # a browser opens; sign in, then close the window or press Enter. Same for javbus and avbase
+uv run shelf login javdb      # a browser opens; sign in, then close the window or press Enter. Same for javbus
 ```
 
-The "Sources & sign-in" panel in `shelf serve` does the same, with a per-site switch and a one-click "clear pause" for sites in cooldown. AVBase has no account, but its Cloudflare check is passed the same way: wait for the check in the window, then click "I have signed in". Cookies and the browser's User-Agent live only in the local global config, never on the disk, in logs or in snapshots.- `routes`: replaces the whole source chain for a content type. Types are `censored | amateur | uncensored | fc2`; sources are `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`. Each site is its own tier and the chain short-circuits: the first site that answers wins.
+The "Sources & sign-in" panel in `shelf serve` does the same, with a per-site switch and a one-click "clear pause" for sites in cooldown. AVBase needs no sign-in: its Cloudflare check looks at the TLS fingerprint, so install `curl_cffi` (`uv sync --extra fingerprint`) and it passes; the panel shows whether it is installed. Cookies and the browser's User-Agent live only in the local global config, never on the disk, in logs or in snapshots.- `routes`: replaces the whole source chain for a content type. Types are `censored | amateur | uncensored | fc2`; sources are `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`. Each site is its own tier and the chain short-circuits: the first site that answers wins.
 
 Snapshots (`<code>-<source>.json`) and cooldowns (`_cooldown.json`) live in `<disk root>/HiddenShelf/sources/`; a code is not asked again within 7 days. A 403 pauses the site for 15 minutes, doubling on repeat; a 429 honors the site's Retry-After.
 

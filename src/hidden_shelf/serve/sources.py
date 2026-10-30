@@ -14,7 +14,7 @@ from pathlib import Path
 from ..netconfig import GlobalConfig
 from ..paths import ShelfPaths
 from ..scrape import login as login_module
-from ..scrape.access import SOURCES, Cooldown
+from ..scrape.access import FINGERPRINT_SOURCES, SOURCES, Cooldown, fingerprint_available
 from ..scrape.login import LOGIN_SOURCES, LoginError
 
 LOGIN_STATUSES = ("idle", "running", "done", "failed")
@@ -26,9 +26,10 @@ class LoginBusy(RuntimeError):
 
 class SourcePanel:
     def __init__(self, *, capture=login_module.capture_login, availability=None, launch=None,
-                 clock=time.time) -> None:
+                 clock=time.time, fingerprint=fingerprint_available) -> None:
         self.capture = capture
         self._availability = availability or login_module.availability
+        self._fingerprint = fingerprint
         self._launch = launch
         self.clock = clock
         self._lock = threading.Lock()
@@ -41,7 +42,9 @@ class SourcePanel:
         cooldown = self._cooldown_for(root)
         hint = self._availability()
         rows = []
-        order = list(LOGIN_SOURCES) + [name for name in SOURCES if name not in LOGIN_SOURCES]
+        front = list(LOGIN_SOURCES) + sorted(FINGERPRINT_SOURCES)
+        order = front + [name for name in SOURCES if name not in front]
+        fingerprint = bool(self._fingerprint())
         for name in order:
             spec = SOURCES[name]
             until = cooldown.paused_until(name) if cooldown else 0.0
@@ -50,11 +53,13 @@ class SourcePanel:
             rows.append({
                 "name": name, "label": spec["label"], "enabled": config.enabled(name),
                 "needs_login": name in LOGIN_SOURCES,
+                "needs_fingerprint": name in FINGERPRINT_SOURCES,
                 "cookie": bool(config.cookie(name)), "user_agent": bool(config.user_agent(name)),
                 "cooldown_until": datetime.fromtimestamp(until).isoformat(timespec="seconds") if until else None,
                 "login": {"status": entry.get("status", "idle"), "message": entry.get("message", "")},
             })
-        return {"sources": rows, "login_available": not hint, "login_hint": hint}
+        return {"sources": rows, "login_available": not hint, "login_hint": hint,
+                "fingerprint_available": fingerprint, "fingerprint_hint": "uv sync --extra fingerprint"}
 
     @staticmethod
     def _cooldown_for(root: str | None) -> Cooldown | None:

@@ -1,6 +1,7 @@
 """在浏览器里登录来源站，把该站 Cookie 与浏览器 UA 存进全局配置（计划 8）。
 
-要登录或要过验证的站（`LOGIN_SOURCES`）：javdb 有登录墙与配额，javbus 有年龄门，avbase 是 Cloudflare 验证。
+要登录的站（`LOGIN_SOURCES`）：javdb 有登录墙与配额，javbus 有年龄门。avbase 不在这里：它的 Cloudflare 看的是
+TLS 指纹，靠 `access.FINGERPRINT_SOURCES` 走 `curl_cffi`，带浏览器 Cookie 反而撞验证（2026-10-30 实测）。
 流程：弹出一个有头的 Chromium（Playwright），停在该站的登录页；用户自己登录或过验证；程序每半秒抓一次该站
 域名下的 Cookie 快照，用户关掉窗口或按「完成」就用最后一份快照落盘。窗口一关 Cookie 就拿不到了，所以快照
 必须每轮都留。凭据只进 `~/.hidden-shelf/config.json`，`notify` 的每一句都不带 Cookie 值。
@@ -19,7 +20,7 @@ from ..netconfig import GlobalConfig
 from .access import SOURCES, host_under
 
 #: 要登录或要过验证的来源，按面板里的顺序。
-LOGIN_SOURCES: tuple[str, ...] = ("javdb", "javbus", "avbase")
+LOGIN_SOURCES: tuple[str, ...] = ("javdb", "javbus")
 INSTALL_HINT = ("没装 Playwright，登录功能不可用。先执行：\n"
                 "  uv sync --extra login\n"
                 "  uv run playwright install chromium")

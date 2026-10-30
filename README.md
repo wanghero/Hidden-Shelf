@@ -93,10 +93,10 @@ open <盘根目录>/index.html       # 3. 看成品（Windows 双击 index.html�
 不想手抄 Cookie 的话，用登录功能：装一次 Playwright（`uv sync --extra login`，再 `uv run playwright install chromium`），然后
 
 ```bash
-uv run shelf login javdb      # 弹出浏览器，登录完关掉窗口或按回车；javbus、avbase 同理
+uv run shelf login javdb      # 弹出浏览器，登录完关掉窗口或按回车；javbus 同理
 ```
 
-进度网页 `shelf serve` 里的「来源与登录」面板也能做同样的事，并且每站有开关、冷却中的站可以一键清除。AVBase 没有登录，但它的 Cloudflare 验证也是这么过：在弹出的窗口里等验证通过再点「我已登录完成」。Cookie 与浏览器 UA 只存在本机的全局配置里，不进盘、日志和快照。
+进度网页 `shelf serve` 里的「来源与登录」面板也能做同样的事，并且每站有开关、冷却中的站可以一键清除。AVBase 不用登录：它的 Cloudflare 认的是 TLS 指纹，装上 `curl_cffi`（`uv sync --extra fingerprint`）就能过，面板上会显示装没装。Cookie 与浏览器 UA 只存在本机的全局配置里，不进盘、日志和快照。
 - `routes`：整条替换某类番号的来源链。内容类型 `censored | amateur | uncensored | fc2`，来源名 `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`。每站各是一档、逐家短路：有一家答了就停。
 
 快照（`<番号>-<来源>.json`）与来源冷却（`_cooldown.json`）在 `<盘根>/HiddenShelf/sources/`，7 天内不重问；403 首停 15 分钟连着翻倍，429 按站方说的时间。

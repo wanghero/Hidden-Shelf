@@ -51,9 +51,9 @@ JAVDB = [{"name": "_jdb_session", "value": "abc", "domain": "javdb.com"},
 
 
 def test_login_sources_are_the_ones_that_gate():
-    assert LOGIN_SOURCES == ("javdb", "javbus", "avbase")
+    assert LOGIN_SOURCES == ("javdb", "javbus"), "avbase 靠指纹传输，不靠登录"
     with pytest.raises(LoginError, match="不在可登录的来源里"):
-        capture_login("r18dev", config=GlobalConfig(), finish=threading.Event(), launch=_launcher(FakeBrowser([[]])))
+        capture_login("avbase", config=GlobalConfig(), finish=threading.Event(), launch=_launcher(FakeBrowser([[]])))
 
 
 def test_capture_uses_last_snapshot_when_window_closes():
