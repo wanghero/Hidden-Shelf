@@ -1,5 +1,7 @@
 # Hidden Shelf（藏片阁）
 
+![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg)
+
 本地番号片整理器：认番号、联网刮削、按 `厂牌/番号/` 归位，并在盘根目录生成纯静态站，插盘双击 `index.html` 即可浏览播放。
 
 - 设计文档：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`
