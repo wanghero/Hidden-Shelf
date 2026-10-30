@@ -4,7 +4,7 @@
 
 **Goal:** 让陌生人敢把自己的盘交给这个程序：加 `--dry-run` 预演（列出要搬的文件、一个不动），加三平台 CI，把 README 改写成用户视角（中英两份），补 CONTRIBUTING、issue 模板、CHANGELOG 与免责声明，版本升到 0.4.0。公开仓库与打标签由用户本机手动做，不在本计划内。
 
-**Architecture:** 预演复用 `organize/plan.py` 的 `build_plan`（计划与执行本来就共用一份判据），新增 `organize/apply.py::preview_organize` 只打印、只写 `.shelf/logs/plan-<时间>.txt`，不备份、不改名、不记 `organize_batch`。`pipeline.run` 加 `dry_run` 参数：`organize` 步改调预演且不再 rescan，`media`、`build` 走现有的 `skipped` 分支（原因 `--dry-run`）。命令行与进度网页各加一个开关，和 `--offline` 并列。CI 用 GitHub Actions 跑现有测试（测试永不联网，天然适合）。文档不改代码行为。
+**Architecture:** 预演复用 `organize/plan.py` 的 `build_plan`（计划与执行本来就共用一份判据），新增 `organize/apply.py::preview_organize` 只打印、只写 `HiddenShelf/logs/plan-<时间>.txt`，不备份、不改名、不记 `organize_batch`。`pipeline.run` 加 `dry_run` 参数：`organize` 步改调预演且不再 rescan，`media`、`build` 走现有的 `skipped` 分支（原因 `--dry-run`）。命令行与进度网页各加一个开关，和 `--offline` 并列。CI 用 GitHub Actions 跑现有测试（测试永不联网，天然适合）。文档不改代码行为。
 
 **Tech Stack:** 现有：Python ≥ 3.12 + uv、FastAPI、原生 JS、ux-standard token；CI 用 GitHub Actions（`astral-sh/setup-uv`、`FedericoCarboni/setup-ffmpeg`、`actions/setup-node`）。不加运行时依赖。
 
@@ -12,9 +12,9 @@
 
 ## Global Constraints
 
-- 当前 `main` 是 **v0.3.11**。每个任务提交 +0.0.1（`pyproject.toml`、`src/hidden_shelf/__init__.py`、`tests/test_smoke.py` 三处同改），Task 1 → 0.3.12，最后一个任务升到 **0.4.0**。提交信息中文。
+- **先做计划 6**（`2026-10-29-plan-6-visible-data-dir.md`，资料目录 `HiddenShelf/` 改为可见的 `HiddenShelf/`），再做本计划。本计划里凡写 `HiddenShelf/` 的地方都读作 `HiddenShelf/`，代码里用 `paths.SHELF_DIR`。每个任务提交 +0.0.1（`pyproject.toml`、`src/hidden_shelf/__init__.py`、`tests/test_smoke.py` 三处同改），接着计划 6 的最后一个版本号往上数，最后一个任务升到 **0.4.0**。提交信息中文。
 - 测试永不联网（`tests/conftest.py` 的 `isolated_home`）；CI 里也不许联网。
-- 预演的承诺要能被测试钉住：**`.shelf/` 之外一个字节都不改**（扫描、导入、刮削照常写 `.shelf/`，这是算出计划的前提，文档里要如实写）。
+- 预演的承诺要能被测试钉住：**`HiddenShelf/` 之外一个字节都不改**（扫描、导入、刮削照常写 `HiddenShelf/`，这是算出计划的前提，文档里要如实写）。
 - 文档里不出现作者本机的私有路径（`~/Claude-Code/...`、`~/.claude/...`、`/Volumes/Seagate-8T/...`）。截图已由本机准备好：`docs/images/wall.jpg`（海报墙）、`docs/images/progress.jpg`（进度网页）、`docs/images/picker.jpg`（目录选择器），都来自演示数据，直接引用，不要重新生成。
 - 刮削来源在作者本机 2026-10-29 的真实冒烟结果（写进 README「来源」一节，不要编别的）：r18dev、javbus、javdb、fc2、javarchive 直连可用；dmm 对 `ABW-358` 回「没有这个番号」；avbase 回 403 进冷却（需要浏览器 Cookie）。
 - `i18n.js` 两套 key 必须一致（`tests/test_serve_app.py::test_i18n_dictionaries_have_same_keys`）；`progress.css` 只用 token（`test_progress_css_uses_only_tokens`）。
@@ -22,8 +22,8 @@
 
 ## Review Focus
 
-1. **从没扫过的盘上直接 `shelf run --dry-run`**：会创建 `.shelf/`（库、日志、快照、封面），但盘上其它地方一个文件不动、一个目录不建、不删空目录。→ Task 2 `test_dry_run_touches_only_shelf_dir`。
-2. **几万条计划**（整块盘）：终端只打前 200 行再提示「还有 N 条，完整清单见 `.shelf/logs/plan-<时间>.txt`」，清单文件写全；进度网页不会被几万条 `step.progress` 拖死（`RunLog` 环形缓冲本来就淘汰 `step.progress`）。→ Task 1 `test_preview_caps_console_lines_but_writes_full_file`。
+1. **从没扫过的盘上直接 `shelf run --dry-run`**：会创建 `HiddenShelf/`（库、日志、快照、封面），但盘上其它地方一个文件不动、一个目录不建、不删空目录。→ Task 2 `test_dry_run_touches_only_shelf_dir`。
+2. **几万条计划**（整块盘）：终端只打前 200 行再提示「还有 N 条，完整清单见 `HiddenShelf/logs/plan-<时间>.txt`」，清单文件写全；进度网页不会被几万条 `step.progress` 拖死（`RunLog` 环形缓冲本来就淘汰 `step.progress`）。→ Task 1 `test_preview_caps_console_lines_but_writes_full_file`。
 3. **预演之后真跑**：预演报 N 个要搬，接着真跑（同样参数）搬的就是这 N 个，不多不少；预演不留下任何让真跑行为变化的状态。→ Task 2 `test_dry_run_then_real_run_matches`。
 4. **模板不合法时预演**：不抛、退出码 0，计划里每行都是 `跳过：模板不合法：…`，清单文件也写这条原因。→ Task 1 `test_preview_reports_bad_template`。
 5. **Windows**：作者只在 macOS 验证过；CI 的 windows job 允许失败（`continue-on-error: true`），README 平台一节如实写「macOS 已验证，Linux 由 CI 验证，Windows 未验证」。CI 第一次在 GitHub 上跑的结果由本机看，云端不用等。→ Task 5、Task 6。
@@ -62,7 +62,7 @@ CLAUDE.md                      「当前阶段」「命令」更新
 
 **Interfaces:**
 - Consumes: `organize.plan.build_plan(connection, paths, config) -> Plan`（`Plan.rows[PlanRow(asset_id, current_path, target_path, action, reason)]`、`Plan.counts`、`Plan.reasons`）。
-- Produces: `preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig, *, progress: Progress = lambda m: None) -> dict`，返回 `{"dry_run": True, "total": int, "move": int, "unchanged": int, "skip": int, "reasons": {原因: 数量}, "plan_file": "<相对 .shelf/ 的路径，如 logs/plan-20261029-170000.txt>"}`。常量 `PREVIEW_CONSOLE_LIMIT = 200`。
+- Produces: `preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig, *, progress: Progress = lambda m: None) -> dict`，返回 `{"dry_run": True, "total": int, "move": int, "unchanged": int, "skip": int, "reasons": {原因: 数量}, "plan_file": "<相对 HiddenShelf/ 的路径，如 logs/plan-20261029-170000.txt>"}`。常量 `PREVIEW_CONSOLE_LIMIT = 200`。
 
 - [ ] **Step 1: 写失败的测试**（加到 `tests/test_apply.py`，复用现有 `disk` 夹具）
 
@@ -70,7 +70,7 @@ CLAUDE.md                      「当前阶段」「命令」更新
 def _snapshot(root: Path) -> dict[str, int]:
     """盘上 .shelf 之外每个文件的大小；预演前后必须一模一样。"""
     return {str(p.relative_to(root)): p.stat().st_size
-            for p in root.rglob("*") if p.is_file() and ".shelf" not in p.parts}
+            for p in root.rglob("*") if p.is_file() and SHELF_DIR not in p.parts}
 
 
 def test_preview_moves_nothing_and_writes_plan_file(disk):
@@ -109,7 +109,7 @@ def test_preview_caps_console_lines_but_writes_full_file(disk, monkeypatch):
     assert (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8").count("MOVE\t") == 4
 ```
 
-（`disk` 夹具里 4 个视频：`a/ABP-758.mp4`、`b/259LUXU-1475-cd1.mp4`、`-cd2.mp4`、`c/deep/随手拍.mp4`，默认配置下 4 个都要搬——其中未识别那个搬去 `未识别/`。若实际数字不同，以 `build_plan` 的真实输出为准改断言，不改规则。）
+（测试文件顶部 `from hidden_shelf.paths import SHELF_DIR`。`disk` 夹具里 4 个视频：`a/ABP-758.mp4`、`b/259LUXU-1475-cd1.mp4`、`-cd2.mp4`、`c/deep/随手拍.mp4`，默认配置下 4 个都要搬——其中未识别那个搬去 `未识别/`。若实际数字不同，以 `build_plan` 的真实输出为准改断言，不改规则。）
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -142,13 +142,13 @@ git commit -m "feat: 归位预演 preview_organize，只列清单不动文件"
 
 **Interfaces:**
 - Consumes: Task 1 的 `preview_organize`。
-- Produces: `pipeline.run(root, *, config=None, steps=STEPS, progress=None, scrape_options=None, cancel=None, dry_run: bool = False) -> RunResult`；`RunResult.dry_run: bool = False`；`dry_run=True` 时 `organize` 步的 stats 就是 `preview_organize` 的返回值（不再 rescan，没有 `"rescan"` 键），`media`、`build` 记 `skipped`，原因字符串 `"--dry-run"`，`result.index_html` 保持 `None`。命令行所有流水线子命令加 `--dry-run`，帮助文案「只预演：列出要搬的文件与原因，不动盘上任何文件（仍会写 .shelf/）」。
+- Produces: `pipeline.run(root, *, config=None, steps=STEPS, progress=None, scrape_options=None, cancel=None, dry_run: bool = False) -> RunResult`；`RunResult.dry_run: bool = False`；`dry_run=True` 时 `organize` 步的 stats 就是 `preview_organize` 的返回值（不再 rescan，没有 `"rescan"` 键），`media`、`build` 记 `skipped`，原因字符串 `"--dry-run"`，`result.index_html` 保持 `None`。命令行所有流水线子命令加 `--dry-run`，帮助文案「只预演：列出要搬的文件与原因，不动盘上任何文件（仍会写 HiddenShelf/）」。
 
 - [ ] **Step 1: 写失败的测试**（加到 `tests/test_pipeline_cli.py`，复用 `disk` 夹具）
 
 ```python
 def _outside_shelf(root: Path) -> set[str]:
-    return {str(p.relative_to(root)) for p in root.rglob("*") if ".shelf" not in p.parts}
+    return {str(p.relative_to(root)) for p in root.rglob("*") if SHELF_DIR not in p.parts}
 
 
 def test_dry_run_touches_only_shelf_dir(disk):
@@ -161,7 +161,7 @@ def test_dry_run_touches_only_shelf_dir(disk):
     assert "rescan" not in result.steps["organize"]
     assert result.steps["media"] == {"skipped": True, "reason": "--dry-run"}
     assert result.steps["build"] == {"skipped": True, "reason": "--dry-run"}
-    with sqlite3.connect(disk / ".shelf" / "shelf.db") as connection:
+    with sqlite3.connect(disk / SHELF_DIR / "shelf.db") as connection:
         assert connection.execute("SELECT status FROM run WHERE step='media'").fetchone()[0] == "skipped"
         assert connection.execute("SELECT count(*) FROM organize_batch").fetchone()[0] == 0
 
@@ -188,7 +188,7 @@ Expected: FAIL，`TypeError: run() got an unexpected keyword argument 'dry_run'`
 
 - [ ] **Step 3: 实现**
 
-`pipeline.py`：把现在只给 `scrape` 用的跳过判断抽成 `_skip_reason(name, config, scrape_options, dry_run) -> str | None`（`scrape` 的两种原因不变；`dry_run` 且 `name in ("media", "build")` → `"--dry-run"`），循环里统一走 `skipped` 分支。`_execute` 加 `dry_run` 参数，`organize` 分支 `dry_run` 时返回 `preview_organize(...)` 且不 rescan。`RunResult` 加 `dry_run` 字段，`run` 开头赋值；日志文件第一行加 `（预演）`。`cli.py`：`--dry-run` 开关；结束时 `result.dry_run` 为真打印 `预演完成：{move} 个要搬，{unchanged} 个已就位，{skip} 个跳过；没有动任何文件，清单：{盘根/.shelf/plan_file}`，不打印「成品」。
+`pipeline.py`：把现在只给 `scrape` 用的跳过判断抽成 `_skip_reason(name, config, scrape_options, dry_run) -> str | None`（`scrape` 的两种原因不变；`dry_run` 且 `name in ("media", "build")` → `"--dry-run"`），循环里统一走 `skipped` 分支。`_execute` 加 `dry_run` 参数，`organize` 分支 `dry_run` 时返回 `preview_organize(...)` 且不 rescan。`RunResult` 加 `dry_run` 字段，`run` 开头赋值；日志文件第一行加 `（预演）`。`cli.py`：`--dry-run` 开关；结束时 `result.dry_run` 为真打印 `预演完成：{move} 个要搬，{unchanged} 个已就位，{skip} 个跳过；没有动任何文件，清单：{盘根/HiddenShelf/plan_file}`，不打印「成品」。
 
 - [ ] **Step 4: 跑全部测试**
 
@@ -198,7 +198,7 @@ Expected: 全部 PASS（`test_serve_e2e.py` 钉的是 `ConsoleProgress` 与网�
 - [ ] **Step 5: 版本 0.3.13，提交**
 
 ```bash
-git commit -am "feat: shelf run --dry-run 预演，只写 .shelf/ 不动盘"
+git commit -am "feat: shelf run --dry-run 预演，只写 HiddenShelf/ 不动盘"
 ```
 
 ---
@@ -211,7 +211,7 @@ git commit -am "feat: shelf run --dry-run 预演，只写 .shelf/ 不动盘"
 
 **Interfaces:**
 - Consumes: Task 2 的 `pipeline.run(dry_run=)`、`RunResult.dry_run`（`run.done` 事件的 `stats` 由 `_plain(result)` 生成，自动带上 `dry_run`）。
-- Produces: `RunOptions.dry_run: bool = False`，`from_payload` 接受 JSON 键 `dry_run`（与 `offline` 同样校验），`to_dict` 带它；`RunManager` 调 `run_pipeline(..., dry_run=options.dry_run)`。前端新增开关 `toggle('dryRun', 'form.dry_run', ...)` 放在「本次不联网」之下，`POST /api/run` 带 `dry_run`。i18n 键：`form.dry_run` 中「只预演：列出要搬的文件，不动盘（仍会写 .shelf/）」英 "Preview only: list the moves, touch nothing (still writes .shelf/)"；`result.dry_run` 中「预演完成，没有动任何文件；清单在 .shelf/logs/ 下」英 "Preview finished, nothing was moved; the list is under .shelf/logs/"；`toast.dry_run` 中「预演完成」英 "Preview finished"；`page.dry_run` 中「上次预演完成」英 "Last preview finished"。
+- Produces: `RunOptions.dry_run: bool = False`，`from_payload` 接受 JSON 键 `dry_run`（与 `offline` 同样校验），`to_dict` 带它；`RunManager` 调 `run_pipeline(..., dry_run=options.dry_run)`。前端新增开关 `toggle('dryRun', 'form.dry_run', ...)` 放在「本次不联网」之下，`POST /api/run` 带 `dry_run`。i18n 键：`form.dry_run` 中「只预演：列出要搬的文件，不动盘（仍会写 HiddenShelf/）」英 "Preview only: list the moves, touch nothing (still writes HiddenShelf/)"；`result.dry_run` 中「预演完成，没有动任何文件；清单在 HiddenShelf/logs/ 下」英 "Preview finished, nothing was moved; the list is under HiddenShelf/logs/"；`toast.dry_run` 中「预演完成」英 "Preview finished"；`page.dry_run` 中「上次预演完成」英 "Last preview finished"。
 
 - [ ] **Step 1: 写失败的测试**
 
@@ -357,13 +357,13 @@ git commit -m "ci: GitHub Actions 三平台跑 pytest 与前端测试"
 
 1. 标题 + 一句话（现有那句）+ CI 徽章 `![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg)` + `[English](README.en.md)`。
 2. 三张截图（海报墙、进度网页、目录选择器），说明是演示数据。
-3. **它会对你的盘做什么**：六步各一句；然后「安全承诺」清单——只做同卷改名、绝不删除、绝不覆盖已存在的目标、归位前自动备份数据库（保留 5 份）、每批搬运有 JSONL 日志可回滚、所有派生产物只在 `.shelf/` 下、媒体目录旁不写任何文件、`--dry-run` 先看清单再动手。
+3. **它会对你的盘做什么**：六步各一句；然后「安全承诺」清单——只做同卷改名、绝不删除、绝不覆盖已存在的目标、归位前自动备份数据库（保留 5 份）、每批搬运有 JSONL 日志可回滚、所有派生产物只在 `HiddenShelf/` 下、媒体目录旁不写任何文件、`--dry-run` 先看清单再动手。
 4. **安装**：前置 Python ≥ 3.12 与 ffmpeg（macOS `brew install ffmpeg`，Debian/Ubuntu `apt install ffmpeg`，Windows 从 ffmpeg.org 下载并加进 PATH）；两种装法：`uv tool install git+https://github.com/wanghero/Hidden-Shelf` 或 `pipx install git+https://github.com/wanghero/Hidden-Shelf`；开发者用 `git clone` + `uv sync`。
 5. **三步上手**：`shelf run <盘根目录> --dry-run` 看清单 → `shelf run <盘根目录>` → 双击盘根的 `index.html`。每步一两句说会看到什么。
 6. **进度网页**：现有段落压缩到 6 行以内，加「只预演」开关。
 7. **联网刮削**：现有「全局配置」一节原样保留；新增「来源」表：8 站 × 列「内容类型 / 需要 Cookie / 2026-10-29 本机冒烟」，数据用 Global Constraints 里给的结果。
-8. **盘上的布局**：`<盘根>/index.html`、`厂牌/番号/番号[-cdN].ext`、`未识别/`、`.shelf/{shelf.db,config.json,overrides.json,site,covers,posters,sheets,avatars,sources,legacy,logs,backups}` 各一句。手改入口 `overrides.json` 的 JSON 例子。
-9. **常见问题**：换台电脑能看吗（能，相对路径）；文件名不是番号怎么办（进 `未识别/`，或关掉开关原地不动）；以前刮削器留下的 NFO 和封面（导入后搬到 `.shelf/legacy/<番号>/`）；搬错了怎么回滚（`.shelf/logs/organize-*.jsonl`，目前要在 Python 里调 `rollback_batch`，命令行入口还没有——如实写）；javdb 要登录（Cookie 配置）；跑一半断网（刮削失败不拦后续步）。
+8. **盘上的布局**：`<盘根>/index.html`、`厂牌/番号/番号[-cdN].ext`、`未识别/`、`HiddenShelf/{shelf.db,config.json,overrides.json,site,covers,posters,sheets,avatars,sources,legacy,logs,backups}` 各一句。手改入口 `overrides.json` 的 JSON 例子。
+9. **常见问题**：换台电脑能看吗（能，相对路径）；文件名不是番号怎么办（进 `未识别/`，或关掉开关原地不动）；以前刮削器留下的 NFO 和封面（导入后搬到 `HiddenShelf/legacy/<番号>/`）；搬错了怎么回滚（`HiddenShelf/logs/organize-*.jsonl`，目前要在 Python 里调 `rollback_batch`，命令行入口还没有——如实写）；javdb 要登录（Cookie 配置）；跑一半断网（刮削失败不拦后续步）。
 10. **平台**：macOS 已验证；Linux 由 CI 验证；Windows 未验证（CI 允许失败），欢迎反馈。
 11. **免责声明**：18+ 工具；只抓公开元数据与封面，不下载视频；不内置任何站点凭据；Cookie 与各站条款由用户自己负责；对数据丢失不承担责任（尽管程序设计上不删不覆盖，备份仍是你自己的事）。
 12. **许可与致谢**：AGPL-3.0-or-later，含义一句（改了拿去做网络服务也得开源）；策略模块移植自 peach，登记在 `docs/REUSE.md`；界面规范 `docs/ux-standard/`。
@@ -395,7 +395,7 @@ git commit -m "docs: README 改写成用户视角，加英文版"
 
 - [ ] **Step 1: `CONTRIBUTING.md`**（中文，末尾附英文摘要 10 行以内）：开发环境（`uv sync`、ffmpeg、node ≥ 20）；三条测试命令；**测试永不联网**与 `isolated_home`；提交规则（中文提交信息、每次改代码版本 +0.0.1 三处同改）；来源坏了怎么报（跑 `scripts/smoke_sources.py <番号> --sources <站>`，把输出贴进 issue）；新增来源要登记 `SITE_SOURCES` 并加契约测试 `tests/test_sources_contract.py`；移植 peach 代码要登记 `docs/REUSE.md`；界面改动遵守 `docs/ux-standard/SKILL.md`。
 
-- [ ] **Step 2: issue 模板**：`bug_report.md`（版本 `shelf --version`、系统、命令或网页操作、期望/实际、`.shelf/logs/run-*.log` 相关片段、是否 `--dry-run` 也能复现）；`source_broken.md`（来源名、番号、`smoke_sources.py` 输出、是否配了 Cookie——提醒**不要贴 Cookie 值**）；`config.yml` 关掉空白 issue。
+- [ ] **Step 2: issue 模板**：`bug_report.md`（版本 `shelf --version`、系统、命令或网页操作、期望/实际、`HiddenShelf/logs/run-*.log` 相关片段、是否 `--dry-run` 也能复现）；`source_broken.md`（来源名、番号、`smoke_sources.py` 输出、是否配了 Cookie——提醒**不要贴 Cookie 值**）；`config.yml` 关掉空白 issue。
 
 - [ ] **Step 3: `CHANGELOG.md`**：Keep a Changelog 格式，一条 `## 0.4.0 - 2026-10-29`：新增（预演 `--dry-run` 与网页开关、CI、中英 README、CONTRIBUTING、issue 模板）、修复（javarchive 标题转义）、以及一句「0.4.0 之前的历史见 git log 与 `docs/superpowers/plans/`」。
 

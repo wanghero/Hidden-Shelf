@@ -13,8 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 状态：**v0.3.11，计划 1「本地流水线」、计划 2「联网刮削」、计划 3「进度网页」、计划 4「盘根目录鼠标选择」全部完成**（四份计划每个任务单独提交），之后两处用户直接要的小改：只读盘开跑前提示（v0.3.10）、海报墙横版封面 + 筛选右置（v0.3.11）。全流程 `扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站`，命令行 `shelf run` 与进度网页 `shelf serve` 跑同一个 `pipeline.run`，输出一致；拔网线照样跑通。
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
 - 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`；计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`；计划 3：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`；计划 4：`docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`（四份都已完成）。
-- **计划 5「开源准备」已批准、待实施**：`docs/superpowers/plans/2026-10-29-plan-5-open-source.md`（预演 `--dry-run`、CI、中英 README、CONTRIBUTING、issue 模板、CHANGELOG，终点 v0.4.0）。从 Task 1 开始逐个任务做，每个任务单独提交。
-- 计划 5 之后没有已批准的计划。候选：跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
+- **已批准、待实施（按这个顺序做）**：先计划 6 `docs/superpowers/plans/2026-10-29-plan-6-visible-data-dir.md`（资料目录 `.shelf/` 改为可见的 `HiddenShelf/`，老盘自动改名），再计划 5 `docs/superpowers/plans/2026-10-29-plan-5-open-source.md`（预演 `--dry-run`、CI、中英 README、CONTRIBUTING、issue 模板、CHANGELOG，终点 v0.4.0）。每个任务单独提交。计划 6 做完后本文件「架构」里的 `.shelf/` 全部读作 `HiddenShelf/`。
+- 计划 5、6 之后没有已批准的计划。候选：跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
 - 计划 2 的真实来源冒烟（`scripts/smoke_sources.py`）在云端会话里**未做**（容器无出站外网），本机有网时按计划 2 Task 11 Step 2 的清单补跑。
 - 与计划的已知出入（以 peach 原函数实跑结果为准，不改规则）：`part_marker("ABP-758-cd1.mp4")` 返回 `"1"` 而不是 `"cd1"`；自定义正则抓到的段仍会归一化（`MYLABEL001` → `MYLABEL-001`）；`-C`（中字版）会被 peach 的 `_PART_MARKER` 当成分卷 `c`。计划 2 的出入：javdb 快照不带 peach 的 `javdb_rule`；企划名义剪不出艺名的整条丢弃（没有复核队列）；带敬称的写法（`木村さん`）按企划名义丢弃。
 - 参考克隆 `reference/peach`（`.gitignore` 排除，commit 见 `docs/REUSE.md`）；云端会话需要时重新 `git clone --depth 1 https://github.com/peach-mitao/peach.git reference/peach`。
