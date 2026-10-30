@@ -68,7 +68,8 @@ def test_root_listing_has_no_parent(tmp_path: Path):
 @pytest.mark.parametrize("raw,status,fragment", [
     ("relative/x", 400, "绝对路径"),
     ("", 400, "绝对路径"),
-    ("/a/../b", 400, ".."),
+    # 带 `..` 的绝对路径要按平台拼：Windows 上 `/a/../b` 没有盘符、不算绝对路径，会先撞「绝对路径」那条。
+    (str(Path(Path.cwd().anchor, "a", "..", "b")), 400, ".."),
 ])
 def test_rejects_bad_paths(raw: str, status: int, fragment: str):
     with pytest.raises(BrowseError) as caught:
