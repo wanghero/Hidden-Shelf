@@ -19,7 +19,7 @@ from .paths import ShelfPaths
 from .rules.codes import normalise_code_key, part_marker
 from .rules.nfo import read_nfo
 from .scan import content_type_of
-from .studios import canonical_studio, canonicalize_existing
+from .studios import canonical_studio, canonicalize_existing, fill_studios_from_code
 
 Progress = Callable[[str], None]
 
@@ -49,6 +49,10 @@ def import_local(connection: sqlite3.Connection, paths: ShelfPaths, *,
     renamed = canonicalize_existing(connection)
     if renamed:
         progress(f"厂牌名改成规范写法：{renamed} 条")
+    # 番号形状独属一家的（Tokyo-Hot 的 n####、HEYZO），厂牌空着就直接补上，不等联网刮削。
+    filled = fill_studios_from_code(connection)
+    if filled:
+        progress(f"按番号形状补上厂牌：{filled} 条")
     result.nfo = _import_nfos(connection, paths, progress)
     result.covers = _import_covers(connection, paths, progress)
     connection.commit()

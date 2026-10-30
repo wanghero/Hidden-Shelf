@@ -12,7 +12,7 @@ from hidden_shelf.local_import import import_local
 from hidden_shelf.paths import ShelfPaths
 from hidden_shelf.scan import scan
 from hidden_shelf.scrape.settle import extract
-from hidden_shelf.studios import canonical_studio, canonicalize_existing
+from hidden_shelf.studios import canonical_studio, canonicalize_existing, fill_studios_from_code, studio_from_code
 
 
 @pytest.mark.parametrize("raw,expected", [
@@ -132,3 +132,55 @@ def test_pipeline_organizes_into_english_folder(tmp_root: Path, fake_video):
     assert not (tmp_root / "カリビアンコム").exists()
     studios = read_data_js(ShelfPaths(tmp_root).site_data / "entities.js")["studios"]
     assert [s["name"] for s in studios] == ["Caribbeancom"]
+
+
+@pytest.mark.parametrize("code,expected", [
+    ("n0610", "Tokyo-Hot"),
+    ("N0610", "Tokyo-Hot"),
+    ("k1234", "Tokyo-Hot"),
+    ("red-123", "Tokyo-Hot"),
+    ("TOKYO-HOT-N0762", "Tokyo-Hot"),
+    ("HEYZO-1031", "HEYZO"),
+    ("heyzo-1031", "HEYZO"),
+    ("ABP-758", ""),            # 有码：字母段不指向任何一家
+    ("032715_001", ""),         # 日期式：カリビアンコム、一本道、天然むすめ 同形，猜不得
+    ("FC2-PPV-1234567", ""),
+    ("", ""),
+    (None, ""),
+])
+def test_studio_from_code(code, expected):
+    assert studio_from_code(code) == expected
+
+
+def test_import_fills_studio_from_code_shape(tmp_root: Path):
+    """番号形状本身说明片商的（Tokyo-Hot 的 `n####`、HEYZO），导入步直接补厂牌，不等联网；
+    已有厂牌的、用户手写的、形状不说明片商的都不碰；再跑一遍什么都不改。"""
+    (tmp_root / "Tokyo Hot n0610 乙音奈々").mkdir()
+    (tmp_root / "Tokyo Hot n0610 乙音奈々" / "n0610.H264.avi").write_bytes(b"0" * 16)
+    for name in ("n0611.avi", "k1234.mp4", "HEYZO-1031.mp4", "ABP-758.mp4", "032715_001.mp4"):
+        (tmp_root / name).write_bytes(b"0" * 16)
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        ids = {row["code"]: int(row["id"]) for row in connection.execute("SELECT id,code FROM asset")}
+        write_owned_fields(connection, "asset", ids["n0611"], [FieldWrite("studio", "我的东热", USER_MANUAL)])
+        write_owned_fields(connection, "asset", ids["k1234"], [FieldWrite("studio", "東京熱", "auto:javbus")])
+        connection.commit()
+        messages: list[str] = []
+        import_local(connection, paths, progress=messages.append)
+        studios = {row["code"]: (row["studio"], owner_of(row["field_owners"], "studio"))
+                   for row in connection.execute("SELECT code, studio, field_owners FROM asset")}
+        assert studios["n0610"] == ("Tokyo-Hot", "auto:local")
+        assert studios["HEYZO-1031"] == ("HEYZO", "auto:local")
+        assert studios["n0611"] == ("我的东热", USER_MANUAL)
+        assert studios["k1234"] == ("Tokyo-Hot", "auto:javbus")     # 规范写法由 canonicalize_existing 改，归属不动
+        assert studios["ABP-758"] == (None, "") and studios["032715_001"] == (None, "")
+        assert any("按番号形状补上厂牌：2 条" in line for line in messages)
+        linked = {row[0]: row[1] for row in connection.execute(
+            "SELECT ae.asset_id, e.canonical_name FROM asset_entity ae JOIN entity e ON e.id=ae.entity_id WHERE ae.role='studio'")}
+        assert linked[ids["n0610"]] == "Tokyo-Hot" and linked[ids["HEYZO-1031"]] == "HEYZO"
+        assert [r[0] for r in connection.execute("SELECT canonical_name FROM entity WHERE kind='studio' ORDER BY canonical_name")] == ["HEYZO", "Tokyo-Hot"]
+        assert fill_studios_from_code(connection) == 0
+    finally:
+        connection.close()

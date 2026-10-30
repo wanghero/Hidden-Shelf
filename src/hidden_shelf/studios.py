@@ -5,13 +5,20 @@
 
 `canonicalize_existing` 给已经刮过的老库用：每次 `import` 步开头跑一遍，把 `asset.studio` 和厂牌实体改成
 规范写法，归属不动；`user:*`/`review:*` 的字段不碰（用户自己写的字按用户的）。
+
+`studio_from_code` / `fill_studios_from_code`：有几家片商的编号形状别家不用（Tokyo-Hot 的 `n####`／`k####`／
+`red-###`、HEYZO 的 `HEYZO-####`），番号本身就是厂牌证据，导入步直接补上，不等联网（用户 2026-10-30 在真实盘上
+碰到：`n0610` 认出了番号，刮削那趟没问成，厂牌空着就归进了 `_未知厂牌/`）。日期式番号不在此列——カリビアンコム、
+一本道、天然むすめ 同形，猜不得。
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 
 from .db import normalize_name, strip_zero_width
-from .field_owners import owner_of
+from .field_owners import FieldWrite, auto_owner, owner_of, write_owned_fields
+from .rules.codes import tokyo_hot_code
 
 #: 规范写法 → 各来源会给出的别名。只登记确认过的；加一家就在这里加一行。
 #: 无码片商一律用官网的英文名（用户 2026-10-30 定：カリビアンコム、一本道、天然むすめ、パコパコママ 都改英文）。
@@ -38,6 +45,48 @@ def canonical_studio(name: str | None) -> str:
     if not text:
         return ""
     return _ALIAS_INDEX.get(normalize_name(text), text)
+
+
+_HEYZO_CODE = re.compile(r"^HEYZO-\d{2,5}$", re.I)
+#: 按番号形状补的厂牌记在 `auto:local` 名下：它是本机证据，联网来源不覆盖（层级 0）；用户手写的照旧最高。
+CODE_SHAPE_OWNER = auto_owner("local")
+
+
+def studio_from_code(code: str | None) -> str:
+    """番号形状独属于哪一家片商就回那家的规范写法；形状不说明片商（有码、日期式、FC2）回空串。"""
+    value = str(code or "").strip()
+    if not value:
+        return ""
+    if tokyo_hot_code(value):
+        return "Tokyo-Hot"
+    if _HEYZO_CODE.fullmatch(value):
+        return "HEYZO"
+    return ""
+
+
+def fill_studios_from_code(connection: sqlite3.Connection) -> int:
+    """厂牌还空着、番号形状又说明片商的资产，补上厂牌并挂上厂牌实体；返回补了几条。
+
+    只填空的（`require_empty`）：别家来源或用户已经写了的不动。幂等，老库再跑一次 `shelf run` 就补上。
+    """
+    from . import entities  # 局部导入：entities.ensure_entity 反过来要用本模块的 canonical_studio
+
+    filled = 0
+    rows = connection.execute(
+        "SELECT id, code FROM asset WHERE code IS NOT NULL AND code<>'' AND (studio IS NULL OR studio='')").fetchall()
+    for row in rows:
+        studio = studio_from_code(row["code"])
+        if not studio:
+            continue
+        written = write_owned_fields(connection, "asset", int(row["id"]),
+                                     [FieldWrite("studio", studio, CODE_SHAPE_OWNER, require_empty=True)])
+        if not written.get("studio"):
+            continue
+        entities.link(connection, int(row["id"]), entities.ensure_entity(connection, "studio", studio), "studio", "local")
+        filled += 1
+    if filled:
+        connection.commit()
+    return filled
 
 
 def _protected(field_owners: str | None) -> bool:
