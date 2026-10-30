@@ -125,7 +125,12 @@
   var avatars = {};
   (entities.performers || []).forEach(function (p) { names.performers[p.id] = p.name; if (p.avatar) avatars[p.id] = p.avatar; });
   function avatarOf(pid) { return avatars[pid] || null; }
-  (entities.tags || []).forEach(function (tg) { names.tags[tg.id] = tg.name; });
+  names.tagsSearch = {};
+  (entities.tags || []).forEach(function (tg) {
+    names.tags[tg.id] = tg.name;
+    var all = [tg.name].concat(tg.names ? [tg.names.zh, tg.names.en, tg.names.ja] : []);
+    names.tagsSearch[tg.id] = all.filter(function (v, i) { return v && all.indexOf(v) === i; }).join(' ');
+  });
   /* 未识别视频上墙时的哨兵（build.py 写的）：按当前语言换成「未识别」「素人」。切换语言后要再调一次。 */
   var UNRECOGNIZED = '__unrecognized__';
   var AMATEUR = '__amateur__';
@@ -134,6 +139,12 @@
     (entities.performers || []).forEach(function (p) { if (p.id === 0 || p.name === AMATEUR) { p.name = t('placeholder.amateur'); names.performers[p.id] = p.name; } });
     ['studios', 'series'].forEach(function (kind) {
       (entities[kind] || []).forEach(function (item) { if (item.id === UNRECOGNIZED) item.name = t('placeholder.unrecognized'); });
+    });
+    // 标签按当前语言显示（build.py 给的 names = {zh, en, ja}；表里没有的三种一样）。
+    (entities.tags || []).forEach(function (tg) {
+      var localized = tg.names && tg.names[lang] ? tg.names[lang] : tg.name;
+      names.tags[tg.id] = localized;
+      tg.name = localized;
     });
   }
   var probe = document.createElement('video');
@@ -269,7 +280,7 @@
     state = state || {};
     var sortKey = state.sort || 'date';
     var sortDir = state.dir || 'desc';
-    var searched = core.searchWorks(works, state.q || '', names);
+    var searched = core.searchWorks(works, state.q || '', { performers: names.performers, tags: names.tagsSearch });
     var filtered = core.filterWorks(searched, state);
     var sorted = core.sortWorks(filtered, sortKey, sortDir);
     var paged = sorted.length > PAGINATE_OVER ? core.paginate(sorted, state.page || 1, PAGE_SIZE) : { page: 1, pages: 1, items: sorted };

@@ -243,3 +243,17 @@ def test_unrecognized_listed_on_wall(disk):
     amateur = next(p for p in entities["performers"] if p["id"] == 0)
     assert amateur["name"] == "__amateur__" and amateur["count"] == 1
     assert len(read_data_js(paths.site_data / "unrecognized.js")) == 1
+
+
+def test_tag_names_in_three_languages(disk):
+    """每个标签带 `names = {zh, en, ja}`；表里有的翻译，没有的三种语言都原样。"""
+    root, paths, connection = disk
+    connection.execute("INSERT INTO entity(kind,canonical_name,normalized_name) VALUES('tag','养胸','养胸')")
+    tag_id = connection.execute("SELECT id FROM entity WHERE canonical_name='养胸'").fetchone()[0]
+    asset_id = connection.execute("SELECT id FROM asset WHERE path='d/ABW-358.mp4'").fetchone()[0]
+    connection.execute("INSERT INTO asset_entity(asset_id,entity_id,role,source,confidence) VALUES(?,?,'tag','test',1)", (asset_id, tag_id))
+    connection.commit()
+    build_site(connection, paths, ShelfConfig())
+    tags = {item["name"]: item for item in read_data_js(paths.site_data / "entities.js")["tags"]}
+    assert tags["巨乳"]["names"] == {"zh": "巨乳", "en": "Big tits", "ja": "巨乳"}
+    assert tags["养胸"]["names"] == {"zh": "养胸", "en": "养胸", "ja": "养胸"}

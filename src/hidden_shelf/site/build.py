@@ -19,6 +19,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .. import __version__
 from ..config import ShelfConfig
+from ..tags_i18n import tag_names
 from ..fsutil import atomic_write_text
 from ..organize.plan import definition_of
 from ..paths import SHELF_DIR, ShelfPaths
@@ -242,7 +243,8 @@ def _view_model(connection: sqlite3.Connection, config: ShelfConfig,
                           key=lambda item: (-item["count"], item["name"])),
         "series": sorted(({"id": name, "name": name, "count": count} for name, count in series_count.items()),
                          key=lambda item: (-item["count"], item["name"])),
-        "tags": roster(tag_count),
+        # 标签带中 / 英 / 日三种写法，前端按当前语言显示、搜索三种都匹配；表里没有的三种一样。
+        "tags": [{**item, "names": tag_names(item["name"])} for item in roster(tag_count)],
     }
     totals = {
         "totalDuration": sum(float(r["duration"] or 0) for r in rows),
