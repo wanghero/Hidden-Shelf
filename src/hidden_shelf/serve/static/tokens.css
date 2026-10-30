@@ -1,0 +1,234 @@
+/* ux-standard tokens v2.0.0 — Soft UI 卡片风
+ * 复制到项目里作为全局样式的第一个文件。组件中只能引用这些变量，禁止硬编码色值/字号/间距。
+ * 换项目主色：只改 --primary 系列（浅色、暗色、prefers-color-scheme 三处）。
+ * 主题：<html data-theme="light|dark">；不设置 data-theme 时跟随系统。
+ * 波纹反馈：同目录 ripple.js。
+ */
+
+:root {
+  /* ---- 字体 ---- */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, "PingFang SC", monospace;
+
+  /* ---- 字号阶梯（px / 行高） ---- */
+  --text-xs: 12px;   --leading-xs: 16px;   /* 辅助说明、徽标 */
+  --text-sm: 13px;   --leading-sm: 20px;   /* 次要信息、表格 */
+  --text-base: 14px; --leading-base: 22px; /* 正文默认 */
+  --text-md: 15px;   --leading-md: 24px;   /* 列表主标题、侧栏导航 */
+  --text-lg: 18px;   --leading-lg: 26px;   /* 卡片标题 */
+  --text-xl: 28px;   --leading-xl: 36px;   /* 页面标题 */
+  --text-display: 34px; --leading-display: 40px; /* 统计大数字 */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;   /* 只用于页面标题、统计大数字、品牌名 */
+
+  /* ---- 间距（4px 网格） ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 8px;    /* 徽标、小按钮、输入框内元素 */
+  --radius: 12px;      /* 按钮、输入框、导航项、列表项、图标块 —— 默认 */
+  --radius-lg: 16px;   /* 卡片、弹窗 */
+  --radius-full: 9999px;
+
+  /* ---- 尺寸（舒适密度） ---- */
+  --sidebar-width: 260px;
+  --content-max: 1280px;
+  --nav-item-h: 48px;
+  --control-h: 40px;       /* 按钮/输入框默认高度 */
+  --control-h-sm: 32px;
+  --control-h-lg: 44px;    /* 页面主操作按钮 */
+  --icon-badge: 48px;      /* 统计卡片的色底图标块 */
+  --touch-min: 44px;
+
+  /* ---- 动效 ---- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;  /* hover、按下 */
+  --duration: 200ms;       /* 展开、弹层出现 */
+  --duration-ripple: 450ms;
+
+  /* ---- 层级 ---- */
+  --z-sidebar: 30;
+  --z-dropdown: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+}
+
+/* ================= 浅色 ================= */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f6f7fb;            /* 页面背景（浅灰，衬托白卡片） */
+  --surface: #ffffff;       /* 卡片、侧栏、弹窗 */
+  --surface-hover: #f3f4f8; /* 列表项 hover */
+  --fg: #111827;
+  --fg-muted: #4b5563;      /* 次要文字 */
+  --fg-subtle: #6b7280;     /* 时间戳、占位符 */
+  --border: #eceef3;        /* 卡片描边、分割线 */
+  --border-strong: #d8dce4; /* 输入框、次级按钮描边 */
+
+  /* 主色：每个项目可改这里 */
+  --primary: #4f46e5;       /* 实心填充：主按钮、侧栏选中项 */
+  --primary-hover: #4338ca;
+  --on-primary: #ffffff;
+  --primary-text: #4f46e5;  /* 链接、强调文字 */
+  --primary-soft: #eef2ff;  /* 浅色底：徽标、胶囊、头像块 */
+  --primary-shadow: 0 6px 16px rgb(79 70 229 / 0.28);
+  --ring: rgb(79 70 229 / 0.45);
+
+  /* 状态色：fg 用于文字/图标，soft 用于色底 */
+  --blue: #2563eb;    --blue-soft: #eff6ff;
+  --success: #15803d; --success-soft: #f0fdf4;
+  --warning: #b45309; --warning-soft: #fffbeb;
+  --danger: #b91c1c;  --danger-soft: #fef2f2;  --on-danger: #ffffff;
+  --neutral-soft: #f3f4f6;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 12px rgb(16 24 40 / 0.04);
+  --shadow-card-hover: 0 2px 4px rgb(16 24 40 / 0.05), 0 8px 24px rgb(16 24 40 / 0.07);
+  --shadow-popover: 0 12px 32px rgb(16 24 40 / 0.12), 0 0 0 1px rgb(16 24 40 / 0.04);
+  --overlay: rgb(17 24 39 / 0.45);
+  --ripple-color: currentColor;
+  --ripple-opacity: 0.14;
+}
+
+/* ================= 暗色 ================= */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0b0d14;
+  --surface: #151923;
+  --surface-hover: #1c2130;
+  --fg: #f3f4f6;
+  --fg-muted: #b4bac6;
+  --fg-subtle: #8c93a3;
+  --border: #242a38;
+  --border-strong: #343b4d;
+
+  --primary: #5b5bf0;
+  --primary-hover: #6d6ff5;
+  --on-primary: #ffffff;
+  --primary-text: #a5b4fc;
+  --primary-soft: #1f2147;
+  --primary-shadow: 0 6px 18px rgb(91 91 240 / 0.35);
+  --ring: rgb(165 180 252 / 0.55);
+
+  --blue: #60a5fa;    --blue-soft: #0f1d36;
+  --success: #4ade80; --success-soft: #0c2417;
+  --warning: #fbbf24; --warning-soft: #2a1f06;
+  --danger: #f87171;  --danger-soft: #2c1113;  --on-danger: #0b0d14;
+  --neutral-soft: #1c2130;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.2);
+  --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.3);
+  --shadow-popover: 0 12px 32px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --overlay: rgb(0 0 0 / 0.6);
+  --ripple-color: currentColor;
+  --ripple-opacity: 0.18;
+}
+
+/* 未手动选择主题时跟随系统（与上面 dark 块保持同步） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #0b0d14;
+    --surface: #151923;
+    --surface-hover: #1c2130;
+    --fg: #f3f4f6;
+    --fg-muted: #b4bac6;
+    --fg-subtle: #8c93a3;
+    --border: #242a38;
+    --border-strong: #343b4d;
+
+    --primary: #5b5bf0;
+    --primary-hover: #6d6ff5;
+    --on-primary: #ffffff;
+    --primary-text: #a5b4fc;
+    --primary-soft: #1f2147;
+    --primary-shadow: 0 6px 18px rgb(91 91 240 / 0.35);
+    --ring: rgb(165 180 252 / 0.55);
+
+    --blue: #60a5fa;    --blue-soft: #0f1d36;
+    --success: #4ade80; --success-soft: #0c2417;
+    --warning: #fbbf24; --warning-soft: #2a1f06;
+    --danger: #f87171;  --danger-soft: #2c1113;  --on-danger: #0b0d14;
+    --neutral-soft: #1c2130;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.2);
+    --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.3);
+    --shadow-popover: 0 12px 32px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+    --overlay: rgb(0 0 0 / 0.6);
+    --ripple-color: currentColor;
+    --ripple-opacity: 0.18;
+  }
+}
+
+/* ================= 基础 ================= */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+}
+
+.tabular, time, td.num { font-variant-numeric: tabular-nums; }
+code, kbd, pre, samp { font-family: var(--font-mono); font-size: 0.923em; }
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+::selection { background: var(--primary-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 骨架屏 */
+.skeleton {
+  background: var(--neutral-soft);
+  border-radius: var(--radius-sm);
+  animation: ux-pulse 1.4s var(--ease) infinite;
+}
+@keyframes ux-pulse { 50% { opacity: 0.55; } }
+
+/* 波纹反馈（配合 ripple.js；元素需加 data-ripple） */
+[data-ripple] { position: relative; overflow: hidden; isolation: isolate; }
+.ux-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--ripple-color);
+  opacity: var(--ripple-opacity);
+  transform: scale(0);
+  pointer-events: none;
+  z-index: -1;
+  animation: ux-ripple var(--duration-ripple) var(--ease) forwards;
+}
+@keyframes ux-ripple { to { transform: scale(1); opacity: 0; } }

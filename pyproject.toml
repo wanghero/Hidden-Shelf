@@ -1,0 +1,36 @@
+[project]
+name = "hidden-shelf"
+version = "0.3.11"
+description = "Hidden Shelf（藏片阁）：本地番号片整理器，归位文件并在盘根目录生成纯静态站"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+requires-python = ">=3.12"
+dependencies = [
+    "pillow>=11",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "fastapi>=0.162.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+shelf = "hidden_shelf.cli:main"
+
+[project.optional-dependencies]
+fingerprint = [
+    "curl-cffi>=0.7",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hidden_shelf"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
