@@ -5,7 +5,7 @@ AGPL-3.0-or-later）。改动：`NotFound` 从 `scrape.transport` 导入，`clea
 「采集设置」改成本项目的「全局配置」。
 
 作品页就是 `/<番号>`，字段在 `<p><span class="header">識別碼:</span> …</p>` 这样的行里，封面是 `bigImage`
-链接（`/pics/cover/<id>_b.jpg`），女优在 `star-name`。它有年龄门，要带用户在全局配置里贴的 Cookie；门页上
+链接（`/pics/cover/<id>_b.jpg`），女优在 `star-name`，類別在 `span.genre` 里的 `/genre/` 链接（有码页才有）。它有年龄门，要带用户在全局配置里贴的 Cookie；门页上
 没有「識別碼」，按这一点报错。中文字段名靠 `access.SourceTransport` 给它加的 `Accept-Language: zh-CN`。
 
 结算上它是兜底来源（`policy.FALLBACK_SOURCES`）：搜不到原番号会给首个近似命中，所以页面上读回的番号必须
@@ -30,6 +30,9 @@ _FIELD = re.compile(r'<p><span class="header">([^<:：]+)[:：]</span>(.*?)</p>'
 _TITLE = re.compile(r"<h3>([^<]*)</h3>")
 _COVER = re.compile(r'<a class="bigImage" href="([^"]+)"')
 _ACTRESS = re.compile(r'<div class="star-name"><a[^>]*>([^<]+)</a>')
+#: 類別栏：每个类别一个 `<span class="genre"><label><input …><a href="…/genre/<id>">名</a></label></span>`。
+#: 无码作品页没有这一栏（JavBus 的无码区不标类别），那就不给标签。
+_GENRE = re.compile(r'<span class="genre">\s*<label>.*?<a href="[^"]*/genre/[^"]*">([^<]+)</a>', re.S)
 
 
 class JavBusSource(SiteSource):
@@ -56,6 +59,7 @@ class JavBusSource(SiteSource):
         heading = _TITLE.search(text)
         cover = _COVER.search(text)
         runtime = re.search(r"\d+", fields.get("長度", ""))
+        genres = tuple(dict.fromkeys(clean(name) for name in _GENRE.findall(text) if clean(name)))
         return SiteRecord(
             source=self.config.name, provenance=self.config.provider, code=shown, source_url=page.url,
             title=clean(heading.group(1)).removeprefix(shown).strip() if heading else "",
@@ -63,4 +67,5 @@ class JavBusSource(SiteSource):
             studio=fields.get("製作商", ""), label=fields.get("發行商", ""),
             series=fields.get("系列", ""), director=fields.get("導演", ""),
             release_date=fields.get("發行日期", ""), runtime=int(runtime.group()) if runtime else None,
+            tags=genres or None,
             cover_urls=(urllib.parse.urljoin(self.config.base_url, cover.group(1)),) if cover else ())

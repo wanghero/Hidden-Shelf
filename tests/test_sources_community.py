@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import re
+
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -231,12 +233,20 @@ def test_parse_fields_and_cover():
     expected = {
         "id": "ABW-358", "source_url": JAVBUS_WORK, "title": TITLE, "actresses": [{"japanese_name": "涼森れむ"}],
         "maker": "プレステージ", "label": "ABSOLUTELY WONDERFUL", "series": "", "director": "",
-        "release_date": "2023-05-26", "runtime": 210, "cover_urls": [JAVBUS_COVER], "cover_url": JAVBUS_COVER}
+        "release_date": "2023-05-26", "runtime": 210, "cover_urls": [JAVBUS_COVER], "cover_url": JAVBUS_COVER,
+        "genres": ["苗條", "巨乳", "單體作品"]}
     assert work(JavBusSource(), {JAVBUS_WORK: JAVBUS_PAGE}, "ABW-358") == expected
     record = JavBusSource().parse(Page(JAVBUS_WORK, JAVBUS_PAGE), "ABW-358")
     assert (record.source, record.provenance, record.code) == ("javbus", "javbus-page", "ABW-358")
     assert record.payload() == expected
-    assert record.tags is None, "JavBus 的類別一栏不在字段行里，这一站不给标签"
+    assert record.tags == ("苗條", "巨乳", "單體作品"), "類別栏的 genre 链接就是标签"
+
+
+def test_javbus_page_without_genres_gives_no_tags():
+    """无码作品页（如 CWPBD-120）没有類別栏：标签留 None，别写成空列表。"""
+    page = re.sub(rb'<span class="genre">.*?</span>\s*', b"", JAVBUS_PAGE, flags=re.S)
+    record = JavBusSource().parse(Page(JAVBUS_WORK, page), "ABW-358")
+    assert record.tags is None and "genres" not in record.payload()
 
 
 def test_gate_page_is_auth_required():
