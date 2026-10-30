@@ -141,6 +141,7 @@ Manual edits go in `HiddenShelf/overrides.json` and are merged on the next `shel
 - **Does it work on another computer?** Yes. The site uses relative paths only, so the drive works wherever it is plugged in.
 - **The file name is not a product code.** By default it moves to `未识别/` (keeping the original folder structure) and is listed separately on the site; `--no-move-unrecognized` leaves such files where they are.
 - **NFO files and covers from an earlier scraper?** They are imported first, then moved to `HiddenShelf/legacy/<code>/`, so nothing stays next to the media.
+- **Screenshots or notes left in the work's own folder?** A folder whose name carries the code counts as the work's own folder; its top-level loose files move along with the video, names unchanged, subfolders stay. The dry-run plan lists them as `EXTRA` rows.
 - **A move went wrong, how do I roll back?** Each batch has `HiddenShelf/logs/organize-<time>.jsonl`. For now you call `hidden_shelf.organize.apply.rollback_batch(connection, paths, log_path)` from Python; there is no CLI entry point yet.
 - **javdb wants a login.** Log in with your browser and paste the Cookie request header into `sources.javdb.cookie` in the global config.
 - **The network dropped mid-run.** A scrape failure is recorded for that step only; organize, media and build still run. Run again when you are online to fill in the gaps.

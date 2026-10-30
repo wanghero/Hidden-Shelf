@@ -141,6 +141,7 @@ open <盘根目录>/index.html       # 3. 看成品（Windows 双击 index.html�
 - **换台电脑能看吗？** 能。站点里全是相对路径，盘插哪台机器都一样。
 - **文件名不是番号怎么办？** 默认搬到 `未识别/`（保留原目录层级），站点里单独列出；`--no-move-unrecognized` 可以让它们原地不动。
 - **以前刮削器留下的 NFO 和封面？** 先导入，再搬到 `HiddenShelf/legacy/<番号>/` 留底，媒体目录旁不再留附属文件。
+- **作品文件夹里还有截图、说明之类的零散文件？** 文件夹名里带着这个番号的，算作品自己的文件夹，里面顶层的零散文件跟着视频一起进新目录，名字不变；子目录不动。预演清单里以 `EXTRA` 行列出。
 - **搬错了怎么回滚？** 每批有 `HiddenShelf/logs/organize-<时间>.jsonl`。目前要在 Python 里调 `hidden_shelf.organize.apply.rollback_batch(connection, paths, 日志路径)`，命令行入口还没有。
 - **javdb 要登录？** 浏览器登录后把 Cookie 请求头贴进全局配置的 `sources.javdb.cookie`。
 - **跑一半断网？** 刮削失败只记本步，归位、媒体、出站照常；下次有网再跑一遍补资料。
