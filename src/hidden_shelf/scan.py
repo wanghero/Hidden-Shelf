@@ -30,6 +30,7 @@ from .rules.codes import (
     same_release_code,
 )
 from .rules.sidecars import ARTWORK, ARTWORK_DIRS, medium_of, sidecar_kind, video_stems
+from .studios import is_uncensored_studio
 
 #: 不进入的目录名（大小写不敏感）。`SHELF_DIR` 是我们自己的产物目录。
 SKIP_DIRS = frozenset(name.casefold() for name in (
@@ -54,14 +55,18 @@ class ScanResult:
     unrecognized: int = 0
 
 
-def content_type_of(name: str, code: str | None) -> str:
-    """按番号形状分类：`censored | amateur | uncensored | fc2 | other | unrecognized`。"""
+def content_type_of(name: str, code: str | None, studio: str | None = None) -> str:
+    """按番号形状分类：`censored | amateur | uncensored | fc2 | other | unrecognized`。
+
+    `studio` 是库里已有的厂牌：归位改名后文件名里的发行站名没了（`Catwalk CWPBD-120 …` → `CWPBD-120.mp4`），
+    厂牌是登记过的无码片商就仍算无码，类型不随改名回落。
+    """
     if not code:
         return "unrecognized"
     key = normalise_code_key(code)
     if key.startswith("FC2"):
         return "fc2"
-    if is_uncensored_release(name, key):
+    if is_uncensored_release(name, key) or is_uncensored_studio(studio):
         return "uncensored"
     if is_amateur_code(key):
         return "amateur"
@@ -224,10 +229,10 @@ def _register_video(connection, rel: str, name: str, size: int, mtime: float, no
         write_owned_fields(connection, "asset", asset_id,
                            [FieldWrite("code", code, SCAN_FILENAME, require_empty=True)])
     # 派生列按库里现在的番号算：用户改过的番号在上一步没被覆盖，派生列要跟着它。
-    current = connection.execute("SELECT code FROM asset WHERE id=?", (asset_id,)).fetchone()[0]
+    current, studio = connection.execute("SELECT code, studio FROM asset WHERE id=?", (asset_id,)).fetchone()
     key = normalise_code_key(current) if current else None
     connection.execute("UPDATE asset SET code_key=?,part=?,content_type=? WHERE id=?",
-                       (key, part_marker(name) if current else "", content_type_of(name, current), asset_id))
+                       (key, part_marker(name) if current else "", content_type_of(name, current, studio), asset_id))
     return asset_id, added, updated, current
 
 

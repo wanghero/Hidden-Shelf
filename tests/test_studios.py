@@ -186,3 +186,25 @@ def test_import_fills_studio_from_code_shape(tmp_root: Path):
         assert fill_studios_from_code(connection) == 0
     finally:
         connection.close()
+
+
+def test_studio_keeps_uncensored_type_after_rename(tmp_root: Path):
+    """归位改名后文件名里没了发行站名，厂牌是登记过的无码片商就仍算无码。"""
+    from hidden_shelf.scan import content_type_of
+    assert content_type_of("Catwalk CWPBD-120 Miku Ohashi.mp4", "CWPBD-120") == "uncensored"
+    assert content_type_of("CWPBD-120.mp4", "CWPBD-120") == "censored"
+    assert content_type_of("CWPBD-120.mp4", "CWPBD-120", "キャットウォーク") == "uncensored"
+    assert content_type_of("CWPBD-120.mp4", "CWPBD-120", "Catwalk") == "uncensored"
+    assert content_type_of("ABP-758.mp4", "ABP-758", "Prestige") == "censored"
+    (tmp_root / "CWPBD-120.mp4").write_bytes(b"0" * 16)
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        asset_id = connection.execute("SELECT id FROM asset").fetchone()[0]
+        write_owned_fields(connection, "asset", asset_id, [FieldWrite("studio", "キャットウォーク", "auto:javbus")])
+        connection.commit()
+        scan(connection, paths, ShelfConfig())
+        assert connection.execute("SELECT content_type FROM asset").fetchone()[0] == "uncensored"
+    finally:
+        connection.close()

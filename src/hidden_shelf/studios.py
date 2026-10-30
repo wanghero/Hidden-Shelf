@@ -90,6 +90,11 @@ def fill_studios_from_code(connection: sqlite3.Connection) -> int:
     return filled
 
 
+def is_uncensored_studio(name: str | None) -> bool:
+    """`STUDIO_CANONICAL` 登记的全是无码片商：厂牌在表里就是无码的本机证据。"""
+    return bool(name) and canonical_studio(name) in STUDIO_CANONICAL
+
+
 def _protected(field_owners: str | None) -> bool:
     owner = str(owner_of(field_owners, "studio") or "")
     return owner.startswith(("user:", "review:"))
