@@ -14,7 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 设计文档（已批准）：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`。所有决定以它为准。
 - 实施计划 1：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`；计划 2：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`；计划 3：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`；计划 4：`docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`；计划 5：`docs/superpowers/plans/2026-10-29-plan-5-open-source.md`（五份都已完成）。
 - 面向外人的文档：`README.md`（中）、`README.en.md`（英）、`CONTRIBUTING.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/`；CI `.github/workflows/test.yml` 三平台（Windows 允许失败）。公开仓库、打 `v0.4.0` 标签、看 Actions 首次结果由用户本机做。
-- 下一步没有已批准的计划。候选：`shelf rollback <批次日志>` 命令行入口、跨进程运行锁（`.shelf/run.lock`）、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
+- **计划 6「资料目录改为可见的 HiddenShelf/」已批准、待实施**：`docs/superpowers/plans/2026-10-29-plan-6-visible-data-dir.md`（`.shelf/` 改名 `HiddenShelf/`，目录名收口到 `paths.SHELF_DIR`，老盘自动改名）。计划 5 已先于它做完，所以版本接 0.4.0 往上数，做完后把 README、CONTRIBUTING、CHANGELOG 里的 `.shelf/` 一并改掉；本文件「架构」里的 `.shelf/` 届时全部读作 `HiddenShelf/`。
+- 计划 6 之后没有已批准的计划。候选：`shelf rollback <批次日志>` 命令行入口、跨进程运行锁、步内取消、接 amane 或自写 mgstage/prestige 来源（见设计文档 §6）。
 - 计划 2 的真实来源冒烟（`scripts/smoke_sources.py`）在云端会话里**未做**（容器无出站外网），本机有网时按计划 2 Task 11 Step 2 的清单补跑。
 - 与计划的已知出入（以 peach 原函数实跑结果为准，不改规则）：`part_marker("ABP-758-cd1.mp4")` 返回 `"1"` 而不是 `"cd1"`；自定义正则抓到的段仍会归一化（`MYLABEL001` → `MYLABEL-001`）；`-C`（中字版）会被 peach 的 `_PART_MARKER` 当成分卷 `c`。计划 2 的出入：javdb 快照不带 peach 的 `javdb_rule`；企划名义剪不出艺名的整条丢弃（没有复核队列）；带敬称的写法（`木村さん`）按企划名义丢弃。
 - 参考克隆 `reference/peach`（`.gitignore` 排除，commit 见 `docs/REUSE.md`）；云端会话需要时重新 `git clone --depth 1 https://github.com/peach-mitao/peach.git reference/peach`。
