@@ -30,12 +30,17 @@ else
 fi
 
 pkill -f "shelf serve" 2>/dev/null && echo "已停掉旧的 shelf serve" || true
-for _ in $(seq 1 20); do
-  lsof -iTCP:"$PORT" -sTCP:LISTEN -nP >/dev/null 2>&1 || break
+# 等到端口真的能绑上为止（刚停掉的进程会让端口在 TIME_WAIT 里再占几秒，lsof 看不出来）。
+port_free() { python3 -c "import socket,sys; s=socket.socket(); s.settimeout(1)
+try: s.bind(('127.0.0.1', $PORT))
+except OSError: sys.exit(1)
+finally: s.close()"; }
+for _ in $(seq 1 40); do
+  port_free && break
   sleep 0.5
 done
-if lsof -iTCP:"$PORT" -sTCP:LISTEN -nP >/dev/null 2>&1; then
-  echo "端口 $PORT 还被占着：" >&2; lsof -iTCP:"$PORT" -sTCP:LISTEN -nP >&2; exit 1
+if ! port_free; then
+  echo "端口 $PORT 等了 20 秒还被占着：" >&2; lsof -iTCP:"$PORT" -nP >&2 || true; exit 1
 fi
 
 cd "$REPO"
