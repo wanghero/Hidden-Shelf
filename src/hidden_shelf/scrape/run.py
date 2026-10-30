@@ -21,7 +21,7 @@ from ..config import ShelfConfig
 from ..netconfig import GlobalConfig
 from ..paths import ShelfPaths
 from . import routes
-from .access import Cooldown, SourcePaused, SourceTransport, source_for
+from .access import BudgetExhausted, Cooldown, SourcePaused, SourceTransport, source_for
 from .apply import apply_settled, should_scrape
 from .avatars import install_avatars
 from .covers import best_cover, candidates_from_records, install_online_cover
@@ -139,7 +139,8 @@ class _Scraper:
             if source not in self.result.paused:
                 self.result.paused.append(source)
             self.progress(f"{code} {source} 暂停：{error}")
-            if "本趟" in str(error):
+            # 只有整趟预算用完才停；单站冷却（包括上一趟留下的）只让那一家歇着，别家照问。
+            if isinstance(error, BudgetExhausted):
                 raise _StopRun(str(error)) from error
             return None
         except httpx.TransportError as error:

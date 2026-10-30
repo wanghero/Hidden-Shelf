@@ -57,6 +57,10 @@ class SourcePaused(RuntimeError):
     """来源冷却期内（或本趟预算用完）停止请求。"""
 
 
+class BudgetExhausted(SourcePaused):
+    """本趟的请求次数或时间预算用完：跟单站冷却不同，这是整趟都该停的信号。"""
+
+
 def hostname_of(url: str) -> str:
     return (urlsplit(url).hostname or "").lower()
 
@@ -183,11 +187,11 @@ class SourceTransport:
             headers = {key: value for key, value in request.headers.items() if key.lower() != "accept-language"}
             request = HttpRequest(request.method, request.url, {**headers, "Accept-Language": "zh-CN,zh;q=0.9"}, request.body)
         if self.max_requests and self.requests >= self.max_requests:
-            raise SourcePaused("本趟采集次数已用完，再跑一次接着采")
+            raise BudgetExhausted("本趟采集次数已用完，再跑一次接着采")
         if self.deadline:
             timeout = min(timeout, self.deadline - self.now())
             if timeout <= 0:
-                raise SourcePaused("本趟采集时间已用完，再跑一次接着采")
+                raise BudgetExhausted("本趟采集时间已用完，再跑一次接着采")
         key = source or hostname_of(request.url)
         if self.cooldown.paused_until(key):
             raise SourcePaused(f"来源 {key} 正在冷却，本趟不再请求")

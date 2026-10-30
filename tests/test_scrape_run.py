@@ -315,3 +315,18 @@ def test_one_failing_code_does_not_stop_the_run(disk, monkeypatch):
     assert result.failed == 1
     assert "RuntimeError: 炸了" in (_asset(connection)["scrape_note"] or "")
     assert any("ABW-358 出错" in line for line in lines)
+
+
+def test_cooldown_left_by_earlier_run_skips_only_that_source(disk):
+    """上一趟留下的单站冷却只让那一家歇着：别家照问、后面的番号照跑，整趟不中止。"""
+    root, paths, connection = disk
+    connection.execute("INSERT INTO asset(path,name,medium,code,code_key,content_type) VALUES(?,?,?,?,?,?)",
+                       ("b/SSIS-057.mp4", "SSIS-057.mp4", "video", "SSIS-057", "SSIS-057", "censored"))
+    connection.commit()
+    (paths.sources / "_cooldown.json").write_text(json.dumps({"avbase": {"until": T + 3600, "blocks": 1}}), encoding="utf-8")
+    pages = {DMM_ENDPOINT: DMM_EMPTY}
+    result, transport, lines = run(disk, pages)
+    assert result.paused == ["avbase"] and transport.count("avbase.net") == 0
+    assert transport.count("javbus.com") == 2, "avbase 冷却，两个番号的 javbus 都照问"
+    assert any("avbase 暂停" in line for line in lines)
+    assert not any("本趟" in line for line in lines if "暂停" not in line)
