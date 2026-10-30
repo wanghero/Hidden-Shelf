@@ -20,7 +20,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - uses: FedericoCarboni/setup-ffmpeg@v3
+      # setup-ffmpeg@v3 只有 x64 包，macos-latest 已是 arm64（它会直接报「Unsupported architecture」），macOS 改用 Homebrew。
+      - if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - if: runner.os != 'macOS'
+        uses: FedericoCarboni/setup-ffmpeg@v3
       - uses: actions/setup-node@v4
         with:
           node-version: 22
