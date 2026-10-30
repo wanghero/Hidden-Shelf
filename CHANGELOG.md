@@ -2,6 +2,26 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 0.4.7 - 2026-10-30
+
+### 变更
+
+- 无码片商的厂牌全部统一成官网英文名：一本道 → 1pondo、天然むすめ → 10musume、パコパコママ → Pacopacomama、ムラムラってくる素人 → Muramura、東京熱 → Tokyo-Hot、heyzo → HEYZO（0.4.6 已改 Caribbeancom）。老库在下一次 `shelf run` 的导入步自动改名，归位把 `一本道/` 等目录搬到英文名下。
+
+## 0.4.6 - 2026-10-30
+
+### 变更
+
+- 厂牌 カリビアンコム 一律写成英文 **Caribbeancom**（`Carib`、`caribbeancom` 等写法同样归一；カリビアンコムプレミアム → Caribbeancompr）：刮削结算、NFO 导入、厂牌实体三处生效；已经刮过的老库在下一次 `shelf run` 的导入步自动改名并合并实体，归位会把 `カリビアンコム/` 搬到 `Caribbeancom/`。`overrides.json` 里用户自己写的字不动。
+
+## 0.4.5 - 2026-10-30
+
+### 修复
+
+- 老盘（只有 `.shelf/`）第一次用 0.4.2–0.4.4 跑会失败：读配置时抢先建出了 `HiddenShelf/config.json`，迁移再看到两个目录并存就拒绝，而且是裸 traceback。现在迁移在开跑前检查里、读配置之前做；`ShelfConfig.load` 不再写盘，默认配置由建目录那一步写出；老盘自带的配置原样带过去。
+- 命令行：开跑后才发现两目录并存或盘只读，也按退出码 2 打一句人话，不再甩 traceback。
+- CI（0.4.3、0.4.4）：macOS 改用 Homebrew 装 ffmpeg；一个目录列举测试按平台拼绝对路径，Windows 整套测试通过。
+
 ## 0.4.2 - 2026-10-30
 
 资料目录改成普通可见目录（计划 6）。

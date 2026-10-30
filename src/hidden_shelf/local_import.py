@@ -19,6 +19,7 @@ from .paths import ShelfPaths
 from .rules.codes import normalise_code_key, part_marker
 from .rules.nfo import read_nfo
 from .scan import content_type_of
+from .studios import canonical_studio, canonicalize_existing
 
 Progress = Callable[[str], None]
 
@@ -44,6 +45,10 @@ def import_local(connection: sqlite3.Connection, paths: ShelfPaths, *,
     """导入全部待处理的 NFO 与封面，最后合并 `overrides.json`。"""
     paths.ensure()
     result = ImportResult()
+    # 老库里的厂牌别名先改成规范写法（カリビアンコム → Caribbeancom），之后归位与出站才会用新名字。
+    renamed = canonicalize_existing(connection)
+    if renamed:
+        progress(f"厂牌名改成规范写法：{renamed} 条")
     result.nfo = _import_nfos(connection, paths, progress)
     result.covers = _import_covers(connection, paths, progress)
     connection.commit()
@@ -86,6 +91,8 @@ def _import_nfos(connection, paths, progress) -> int:
 
 def _apply_nfo(connection, asset: sqlite3.Row, payload: dict) -> None:
     asset_id = int(asset["id"])
+    if payload.get("studio"):
+        payload = {**payload, "studio": canonical_studio(payload["studio"])}
     writes = [FieldWrite(key, payload[key], NFO_OWNER) for key in _NFO_SCALARS if payload.get(key)]
     if payload.get("code") and not asset["code"]:
         writes.append(FieldWrite("code", payload["code"], NFO_OWNER, require_empty=True))

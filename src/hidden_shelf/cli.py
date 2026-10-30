@@ -8,7 +8,8 @@ from pathlib import Path
 
 from . import __version__, pipeline
 from .config import ShelfConfig
-from .paths import SHELF_DIR, RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable
+from .paths import (SHELF_DIR, RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable,
+                    migrate_legacy_dir)
 
 COMMANDS = {
     "run": ("全流程：扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站", pipeline.STEPS),
@@ -124,6 +125,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         check_writable(root)
         check_layout(root)
+        # 老盘迁移必须在读配置之前：读配置本身不建目录，但后面任何一步都可能建 HiddenShelf/。
+        if migrate_legacy_dir(root):
+            print(pipeline.MIGRATED_NOTE)
     except (RootNotWritable, ShelfLayoutConflict) as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -144,8 +148,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     progress = pipeline.ConsoleProgress(verbose=args.verbose)
     _help, steps = COMMANDS[args.command]
-    result = pipeline.run(root, config=config, steps=steps, progress=progress, scrape_options=options,
-                          dry_run=args.dry_run)
+    try:
+        result = pipeline.run(root, config=config, steps=steps, progress=progress, scrape_options=options,
+                              dry_run=args.dry_run)
+    except (RootNotWritable, ShelfLayoutConflict) as error:
+        # 前置检查之后、开跑之前盘变了（有人复制了目录、盘被改成只读）：说人话，不甩 traceback。
+        print(str(error), file=sys.stderr)
+        return 2
     if not result.ok:
         print(f"失败于 {pipeline.STEP_LABELS.get(result.failed_step, result.failed_step)}：{result.error}", file=sys.stderr)
         if result.log_path:

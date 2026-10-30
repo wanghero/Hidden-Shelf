@@ -27,11 +27,10 @@ class ShelfConfig:
 
     @classmethod
     def load(cls, paths: ShelfPaths) -> "ShelfConfig":
-        """读配置；文件不存在时写出默认值。坏 JSON 用默认值但不覆盖文件。"""
+        """读配置，没有副作用：文件不存在只回默认值（默认文件由 `ShelfPaths.ensure()` 写出，那时老盘的
+        `.shelf/` 已经迁移完，不会在这里抢先建出 `HiddenShelf/`）。坏 JSON 用默认值但不覆盖文件。"""
         if not paths.config.is_file():
-            config = cls()
-            config.save(paths)
-            return config
+            return cls()
         try:
             raw = json.loads(paths.config.read_text(encoding="utf-8"))
         except (OSError, ValueError):

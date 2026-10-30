@@ -29,6 +29,8 @@ STEPS: tuple[str, ...] = ("scan", "import", "scrape", "organize", "media", "buil
 STEP_LABELS = {"scan": "扫描", "import": "导入", "scrape": "刮削", "organize": "归位", "media": "媒体", "build": "出站"}
 #: 失败不中断后续步的那一步。
 _SOFT_STEPS = frozenset({"scrape"})
+#: 老盘迁移完给用户看的那一句（命令行、网页日志、运行日志文件三处同一句）。
+MIGRATED_NOTE = f"已把 {LEGACY_SHELF_DIR}/ 改名为 {SHELF_DIR}/，请重新出站（shelf run 会自动做）"
 
 
 @dataclass
@@ -169,9 +171,8 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
 
             write(f"开始：{root}，步骤 {list(steps)}" + ("（预演）" if dry_run else ""))
             if migrated:
-                note = f"已把 {LEGACY_SHELF_DIR}/ 改名为 {SHELF_DIR}/，请重新出站（shelf run 会自动做）"
-                write(note)
-                progress.log("info", note)
+                write(MIGRATED_NOTE)
+                progress.log("info", MIGRATED_NOTE)
             for name in steps:
                 if cancel is not None and cancel():
                     result.cancelled = True

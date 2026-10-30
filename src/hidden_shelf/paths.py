@@ -92,6 +92,7 @@ class ShelfPaths:
         """建全部 `HiddenShelf/` 下的目录。`未识别/` 由归位按需建。盘不可写抛 `RootNotWritable`（带怎么办）。
 
         开头先把老盘的 `.shelf/` 改名（`migrate_legacy_dir`）；两个目录都在抛 `ShelfLayoutConflict`。
+        末尾没有 `config.json` 就写一份默认配置（`ShelfConfig.load` 自己不写盘）。
         """
         migrate_legacy_dir(self.root)
         for directory in (self.shelf, self.site, self.site_data, self.covers, self.posters,
@@ -103,6 +104,9 @@ class ShelfPaths:
                 if error.errno in _NOT_WRITABLE_ERRNOS:
                     raise RootNotWritable(self.root, error.errno) from error
                 raise
+        if not self.config.is_file():
+            from .config import ShelfConfig  # 局部导入：config 依赖本模块
+            ShelfConfig().save(self)
 
 
     def relative(self, path: Path) -> str:

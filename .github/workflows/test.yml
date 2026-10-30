@@ -20,10 +20,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      # setup-ffmpeg@v3 只有 x64 包，macos-latest 已是 arm64（它会直接报「Unsupported architecture」），macOS 改用 Homebrew。
+      # ffmpeg 尽量用各平台自己的包管理器装：setup-ffmpeg@v3 只有 x64 包（macos-latest 已是 arm64，报
+      # 「Unsupported architecture」），而且每次都去外网读静态构建的 readme，读不到就整个 job 挂
+      # （「Failed to read version from readme」，2026-10-30 ubuntu 撞到过一次）。只剩 Windows 还用它。
       - if: runner.os == 'macOS'
         run: brew install ffmpeg
-      - if: runner.os != 'macOS'
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - if: runner.os == 'Windows'
         uses: FedericoCarboni/setup-ffmpeg@v3
       - uses: actions/setup-node@v4
         with:
