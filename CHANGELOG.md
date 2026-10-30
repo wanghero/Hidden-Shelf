@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 0.4.12 - 2026-10-30
+
+### 新增
+
+- 转载站把厂牌名写在番号前面的文件名也能认（`Catwalk CWPBD-120 Miku Ohashi - ….mp4` → `CWPBD-120`）：登记过的无码厂牌名（Catwalk / Catwalk Poison、Caribbeancom、1pondo、10musume、Pacopacomama、Muramura、HEYZO、Tokyo Hot）可以站在番号前面；别的英文词站在前面仍按片名处理，不认。Catwalk 同时登记为无码发行站，厂牌 キャットウォーク 归一为 **Catwalk**。
+
 ## 0.4.11 - 2026-10-30
 
 ### 变更

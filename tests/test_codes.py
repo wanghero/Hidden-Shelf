@@ -23,6 +23,7 @@ from hidden_shelf.rules.codes import (
     is_jav_code,
     is_repost_site_label,
     is_uncensored_code,
+    is_uncensored_release,
     jav_display_metadata,
     jav_edition_badges,
     jav_fallback_title,
@@ -460,6 +461,16 @@ class TitledFilenameTests(unittest.TestCase):
     def test_only_the_first_ascii_run_may_be_the_code(self):
         self.assertIsNone(release_code_from_filename("Rena n1042 clip.mp4"))
         self.assertIsNone(release_code_from_filename("Morning ABP-123 talk.mp4"))
+
+    def test_a_known_label_name_before_the_code_is_skipped(self):
+        """转载站把厂牌名写在番号前面（`Catwalk CWPBD-120 …`）：登记过的无码厂牌名可以站在番号前面，
+        别的英文词不行（上一条测试）。"""
+        for name, code in (("Catwalk CWPBD-120 Miku Ohashi - Jav Uncensored Porn Tubes.mp4", "CWPBD-120"),
+                           ("Catwalk Poison CWPBD-120.mp4", "CWPBD-120"),
+                           ("catwalk_CWP-089 title.mp4", "CWP-089"),
+                           ("Caribbeancom ABC-123 title.mp4", "ABC-123")):
+            self.assertEqual(release_code_from_filename(name), code, name)
+        self.assertTrue(is_uncensored_release("Catwalk CWPBD-120 Miku Ohashi.mp4", "CWPBD-120"))
 
     def test_a_glued_or_underscored_handle_in_a_title_is_not_a_code(self):
         for name in ("南叔(Nanshu969)片名.zip", "推特网黄「LOOKS199」片名.mp4",

@@ -31,6 +31,7 @@ STUDIO_CANONICAL: dict[str, tuple[str, ...]] = {
     "Muramura": ("ムラムラってくる素人", "ムラムラ", "muramura"),
     "Tokyo-Hot": ("東京熱", "Tokyo Hot", "TokyoHot", "東京熱 Tokyo-Hot"),
     "HEYZO": ("Heyzo", "ヘイゾー"),
+    "Catwalk": ("キャットウォーク", "Catwalk Poison", "キャットウォーク ポイズン", "CatwalkPoison"),
 }
 
 _ALIAS_INDEX: dict[str, str] = {}

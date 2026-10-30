@@ -302,6 +302,11 @@ _QUALITY_TOKEN = re.compile(r"^(?:hd|fhd|sd|uhd|4k|2160p?|1080p?|720p?)$", re.I)
 #: 序号至少三位：两位的（`ShinoAoi-15`、`miru-10`）是创作者的分集号；后面紧跟月日的
 #: （`TG-2025-01-27`）是日期。只取词元开头这一段，紧跟的版次和分卷（`-C`、`-CD1`、
 #: `_part1`）不影响番号。
+#: 转载站爱把厂牌名写在番号前面（`Catwalk CWPBD-120 Miku Ohashi - …`）。只放行登记过的无码厂牌名：
+#: 别的英文词站在番号前面多半是片名（`Morning ABP-123 talk`），peach 的「只看第一段」仍然成立。
+_LABEL_HEAD = re.compile(
+    r"(?i)^(?:catwalk(?:[ _-]?poison)?|carib(?:bean(?:com)?(?:pr)?)?|1pon(?:do)?|10mu(?:sume)?|heyzo|"
+    r"pacopacomama|paco|muramura|tokyo[-_. ]?hot)[ _-]+")
 _HYPHENATED_CODE = re.compile(
     rf"^(?:{_KIRARI_BODY}(?![0-9])|(?:\d{{3}})?[A-Z]{{2,8}}-\d{{3,5}}(?![0-9]|-\d{{2}}-\d))",
     re.I,
@@ -812,7 +817,7 @@ def _titled_release_code(stem: str) -> str | None:
     fc2 = _FC2_IN_TITLE.search(stem)
     if fc2:
         return normalise_code_key(f"FC2-PPV-{fc2.group(1)}")
-    for token in _TITLE_TOKEN.findall(strip_promo_markers(stem)):
+    for token in _TITLE_TOKEN.findall(_LABEL_HEAD.sub("", strip_promo_markers(stem).strip())):
         if _QUALITY_TOKEN.match(token):
             continue
         head = _HYPHENATED_CODE.match(token)
@@ -863,7 +868,7 @@ UNCENSORED_CODE_SHAPES = (
 _UNCENSORED_SITE = re.compile(
     r"(?i)(?<![A-Z0-9])(?:"
     r"carib(?:bean(?:com)?(?:pr)?)?|1pon(?:do)?|10mu(?:sume)?|heyzo|"
-    r"pacopacomama|paco|muramura|" + _TOKYO_HOT_SITE_TOKEN +
+    r"pacopacomama|paco|muramura|catwalk(?:[ _-]?poison)?|" + _TOKYO_HOT_SITE_TOKEN +
     r")(?![A-Z0-9])"
 )
 #: 版次标记有时和番号粘在一起，中间没有分隔符：`PPPD-937CH.mp4`、`MIDV-751CH.mp4`。

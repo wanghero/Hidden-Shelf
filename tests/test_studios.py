@@ -31,6 +31,8 @@ from hidden_shelf.studios import canonical_studio, canonicalize_existing, fill_s
     ("ムラムラってくる素人", "Muramura"),
     ("東京熱", "Tokyo-Hot"),
     ("heyzo", "HEYZO"),
+    ("キャットウォーク", "Catwalk"),
+    ("Catwalk Poison", "Catwalk"),
     ("Prestige", "Prestige"),                 # 没登记的原样
     ("MGS", "MGS"),
     ("", ""),
