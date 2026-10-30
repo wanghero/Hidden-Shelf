@@ -37,6 +37,7 @@ uv run shelf config [<盘根目录>]          # 打印全局配置位置、代�
 uv run shelf run <盘根目录> --no-move-unrecognized --dir-template "{studio}/{code}" --file-template "{code}[-cd{cd}]" --language en
 uv run python scripts/smoke_sources.py ABW-358 --sources r18dev,dmm,avbase,javbus,javdb   # 真实来源冒烟（手动，需外网）
 uv run shelf serve [--port 8031] [--no-browser]   # 进度网页：只监听 127.0.0.1，默认口 8031 被占就在 8000–8099 内往后找
+scripts/restart-serve.sh [端口]            # 停掉旧的 shelf serve、等端口释放、后台重启并打开浏览器（日志 ~/.hidden-shelf/serve.log）
 ```
 
 验证进度网页：`shelf serve --no-browser` 跑在后台，Playwright 无头 Chromium 连 `http://127.0.0.1:<port>/`（脚本不进仓库，放 scratchpad）。验证目录选择器时用 `HIDDEN_SHELF_VOLUMES=<临时卷目录>` 起服务，让位置列出现造好的卷；容器里是 root，`chmod 000` 挡不住，「无权限」那一层用 Playwright 拦截 `/api/browse` 回 403（后端映射有单元测试）。
