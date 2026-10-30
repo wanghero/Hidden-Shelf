@@ -5,6 +5,10 @@
 单盘根、POSIX 相对路径、逐行 JSONL 批次日志、附属文件随视频搬去 `HiddenShelf/legacy/<番号>/`
 或跟着未识别视频进 `未识别/`。
 
+作品自己的目录（目录名里就是这个番号，如 `Tokyo Hot n0610 乙音奈々/`、`_未知厂牌/n0610/`）里剩下的
+零散文件（截图、说明、没配上对的图片）跟着视频进新目录，名字不变（用户 2026-10-30 定）；只带该目录
+顶层的普通文件，子目录、`.DS_Store` 之类系统垃圾、别的视频与已登记的附属文件不在此列。
+
 只做同一卷内 `os.rename`，绝不删原始文件，绝不覆盖已存在的目标。
 """
 from __future__ import annotations
@@ -21,13 +25,17 @@ from pathlib import Path
 
 from ..config import ShelfConfig
 from ..paths import SHELF_DIR, UNRECOGNIZED_DIR, ShelfPaths
-from .plan import SKIP_TARGET_EXISTS, Plan, build_plan
+from ..rules.codes import release_code_from_text, same_release_code
+from ..rules.sidecars import medium_of
+from .plan import SKIP_TARGET_EXISTS, Plan, PlanRow, build_plan
 
 Progress = Callable[[str], None]
 #: 只保留最近这么多份库备份。
 BACKUP_KEEP = 5
 #: 预演时终端最多打这么多条「现路径 → 目标」，其余只进清单文件（整块盘几万条会把终端刷死）。
 PREVIEW_CONSOLE_LIMIT = 200
+#: 系统自己生成、不值得带走的文件名；`._` 开头的是 macOS 在非 APFS 卷上写的资源叉。
+_JUNK_NAMES = frozenset({".DS_Store", "Thumbs.db", "desktop.ini", "ehthumbs.db"})
 
 
 class OrganizeError(RuntimeError):
@@ -41,6 +49,68 @@ class ApplyResult:
     failed: int = 0
     batch_log: Path | None = None
     removed_dirs: int = 0
+    extras: int = 0
+
+
+def _is_own_dir(directory: str, code: str | None) -> bool:
+    """`directory`（相对盘根）是不是这部片自己的目录：目录名里认出的番号就是它的番号。盘根不算。"""
+    if not directory or not code:
+        return False
+    return same_release_code(release_code_from_text(posixpath.basename(directory)), code)
+
+
+def extra_files_for(connection: sqlite3.Connection, paths: ShelfPaths, code: str | None,
+                    current_path: str, target_path: str) -> list[str]:
+    """视频从自己的目录搬去别的目录时，要一起带走的零散文件（相对盘根，按名字排序）。
+
+    只看该目录顶层的普通文件（不跟符号链接、不进子目录）；视频、已登记的附属文件、系统垃圾不算。
+    视频没换目录就什么都不带。
+    """
+    source_dir = posixpath.dirname(current_path)
+    target_dir = posixpath.dirname(target_path)
+    if source_dir == target_dir or not _is_own_dir(source_dir, code):
+        return []
+    registered = {str(row["path"]) for row in connection.execute(
+        "SELECT path FROM sidecar WHERE path LIKE ?", (source_dir + "/%",))}
+    found: list[str] = []
+    try:
+        entries = list(os.scandir(paths.absolute(source_dir)))
+    except OSError:
+        return []
+    for entry in entries:
+        name = entry.name
+        if name in _JUNK_NAMES or name.startswith("._"):
+            continue
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        if medium_of(name) == "video":
+            continue
+        rel = f"{source_dir}/{name}"
+        if rel in registered:
+            continue
+        found.append(rel)
+    return sorted(found)
+
+
+def _move_extras(connection, paths, code: str | None, old_path: str, video_target: str, log) -> int:
+    """把作品自己目录里剩下的零散文件搬进视频的新目录；返回搬成的个数。目标撞名时另起名字，绝不覆盖。"""
+    moved = 0
+    target_dir = paths.absolute(video_target).parent
+    for rel in extra_files_for(connection, paths, code, old_path, video_target):
+        source = paths.absolute(rel)
+        destination = _free_name(target_dir, source.name)
+        new_rel = paths.relative(destination)
+        try:
+            os.rename(source, destination)
+        except OSError as error:
+            log({"kind": "extra", "from": rel, "to": new_rel, "ok": False, "error": str(error)})
+            continue
+        log({"kind": "extra", "from": rel, "to": new_rel, "ok": True})
+        moved += 1
+    return moved
 
 
 def backup_database(paths: ShelfPaths, connection: sqlite3.Connection | None = None) -> Path:
@@ -154,8 +224,12 @@ def apply_plan(connection: sqlite3.Connection, paths: ShelfPaths, plan: Plan, *,
                 log({"kind": "asset", "asset_id": row.asset_id, "from": row.current_path,
                      "to": row.target_path, "ok": True})
                 _move_sidecars(connection, paths, row.asset_id, row.target_path, log)
+                extras = _move_extras(connection, paths, _code_of(connection, row.asset_id),
+                                      row.current_path, row.target_path, log)
+                result.extras += extras
                 connection.commit()
-                progress(f"[{index}/{len(moves)}] {row.current_path} → {row.target_path}")
+                progress(f"[{index}/{len(moves)}] {row.current_path} → {row.target_path}"
+                         + (f"（连带 {extras} 个文件）" if extras else ""))
             elif outcome == SKIP_TARGET_EXISTS:
                 result.skipped += 1
                 log({"kind": "asset", "asset_id": row.asset_id, "from": row.current_path,
@@ -167,6 +241,11 @@ def apply_plan(connection: sqlite3.Connection, paths: ShelfPaths, plan: Plan, *,
                      "to": row.target_path, "ok": False, "error": outcome})
                 progress(f"[{index}/{len(moves)}] 失败 {row.current_path}：{outcome}")
     return result
+
+
+def _code_of(connection, asset_id: int) -> str | None:
+    row = connection.execute("SELECT code FROM asset WHERE id=?", (asset_id,)).fetchone()
+    return str(row["code"]) if row and row["code"] else None
 
 
 def _move_one(connection, paths, asset_id: int, old_path: str, new_path: str) -> str:
@@ -251,8 +330,9 @@ def rollback_batch(connection: sqlite3.Connection, paths: ShelfPaths, batch_log:
         if entry.get("kind") == "sidecar":
             connection.execute("UPDATE sidecar SET status='pending', moved_to=NULL WHERE id=?",
                                (entry["sidecar_id"],))
-        else:
+        elif entry.get("kind") == "asset":
             _update_row(connection, int(entry["asset_id"]), entry["to"], entry["from"])
+        # `extra` 只是文件改名，库里没有它的行。
         connection.commit()
         restored += 1
     return restored
@@ -276,12 +356,14 @@ def organize(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfCon
          "ok" if not result.failed else "partial", result.moved, result.skipped))
     connection.commit()
     progress(f"归位完成：搬了 {result.moved} 个，跳过 {result.skipped} 个，失败 {result.failed} 个，"
-             f"清掉空目录 {result.removed_dirs} 个")
+             + (f"连带 {result.extras} 个目录内文件，" if result.extras else "")
+             + f"清掉空目录 {result.removed_dirs} 个")
     return result
 
 
-def _write_plan_file(paths: ShelfPaths, plan: Plan) -> Path:
-    """把整份计划写进 `logs/plan-<时间>.txt`：首行是汇总，之后每行 `MOVE\\t现路径\\t目标` 或 `SKIP\\t现路径\\t原因`。"""
+def _write_plan_file(paths: ShelfPaths, plan: Plan, extras: dict[int, list[str]] | None = None) -> Path:
+    """把整份计划写进 `logs/plan-<时间>.txt`：首行是汇总，之后每行 `MOVE\\t现路径\\t目标`、
+    `EXTRA\\t连带文件\\t目标目录/`（紧跟在它所属的 MOVE 后面）或 `SKIP\\t现路径\\t原因`。"""
     paths.logs.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     plan_path = paths.logs / f"plan-{stamp}.txt"
@@ -295,6 +377,8 @@ def _write_plan_file(paths: ShelfPaths, plan: Plan) -> Path:
     for row in plan.rows:
         if row.action == "move":
             lines.append(f"MOVE\t{row.current_path}\t{row.target_path}")
+            for rel in (extras or {}).get(row.asset_id, ()):
+                lines.append(f"EXTRA\t{rel}\t{posixpath.dirname(row.target_path)}/")
         else:
             lines.append(f"SKIP\t{row.current_path}\t{row.reason}")
     plan_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -309,10 +393,13 @@ def preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: 
     """
     plan = build_plan(connection, paths, config)
     counts = plan.counts
-    progress(f"预演：{counts['move']} 个要搬，{counts['unchanged']} 个已就位，{counts['skip']} 个跳过")
+    extras = _preview_extras(connection, paths, plan.moves)
+    extra_total = sum(len(files) for files in extras.values())
+    progress(f"预演：{counts['move']} 个要搬，{counts['unchanged']} 个已就位，{counts['skip']} 个跳过"
+             + (f"，连带 {extra_total} 个目录内文件" if extra_total else ""))
     for reason, count in sorted(plan.reasons.items()):
         progress(f"  跳过原因 {reason}：{count}")
-    plan_path = _write_plan_file(paths, plan)
+    plan_path = _write_plan_file(paths, plan, extras)
     shown = paths.relative(plan_path)
     moves = plan.moves
     for index, row in enumerate(moves[:PREVIEW_CONSOLE_LIMIT], 1):
@@ -326,6 +413,20 @@ def preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: 
         "move": counts["move"],
         "unchanged": counts["unchanged"],
         "skip": counts["skip"],
+        "extras": extra_total,
         "reasons": dict(sorted(plan.reasons.items())),
         "plan_file": paths.shelf_relative(plan_path),
     }
+
+
+def _preview_extras(connection, paths, moves: list[PlanRow]) -> dict[int, list[str]]:
+    """预演时算出每条搬迁会连带哪些文件（`{asset_id: [相对路径]}`）。同一目录的多碟只记在第一碟名下。"""
+    result: dict[int, list[str]] = {}
+    taken: set[str] = set()
+    for row in moves:
+        files = [rel for rel in extra_files_for(connection, paths, _code_of(connection, row.asset_id),
+                                               row.current_path, row.target_path) if rel not in taken]
+        if files:
+            result[row.asset_id] = files
+            taken.update(files)
+    return result

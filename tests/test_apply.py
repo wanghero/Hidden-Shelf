@@ -244,3 +244,74 @@ def test_preview_caps_console_lines_but_writes_full_file(disk, monkeypatch):
     assert len(moves) == 2
     assert any("还有 2 条" in line for line in lines)
     assert (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8").count("MOVE\t") == 4
+
+
+@pytest.fixture
+def work_dirs(tmp_root: Path):
+    """作品自己的目录（目录名里就是番号）与杂物目录各一个。"""
+    own = tmp_root / "Tokyo Hot n0610 乙音奈々"
+    own.mkdir()
+    (own / "n0610.avi").write_bytes(b"video")
+    (own / "new01-16-2011.jpg").write_bytes(b"photo")
+    (own / "readme.txt").write_bytes(b"notes")
+    (own / ".DS_Store").write_bytes(b"ds")
+    (own / "more").mkdir()
+    (own / "more" / "x.jpg").write_bytes(b"deep")
+    shared = tmp_root / "downloads"
+    shared.mkdir()
+    (shared / "ABP-758.mp4").write_bytes(b"video-b")
+    (shared / "unrelated.jpg").write_bytes(b"other")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    scan(connection, paths, ShelfConfig())
+    import_local(connection, paths)
+    yield tmp_root, paths, connection
+    connection.close()
+
+
+def test_apply_extras_follow_video_out_of_its_own_dir(work_dirs):
+    """目录名里就是这个番号的目录，是作品自己的目录：视频搬走时，目录里剩下的文件一起进新目录
+    （用户 2026-10-30 定）。子目录不动，`.DS_Store` 不带，杂物目录（`downloads/`）里别的文件不动。"""
+    root, paths, connection = work_dirs
+    result = apply_plan(connection, paths, build_plan(connection, paths, ShelfConfig()))
+    target = root / "Tokyo-Hot" / "n0610"
+    assert (target / "n0610.avi").read_bytes() == b"video"
+    assert (target / "new01-16-2011.jpg").read_bytes() == b"photo"
+    assert (target / "readme.txt").read_bytes() == b"notes"
+    assert not (target / ".DS_Store").exists()
+    own = root / "Tokyo Hot n0610 乙音奈々"
+    assert (own / "more" / "x.jpg").is_file() and (own / ".DS_Store").is_file()
+    assert [path.name for path in own.iterdir() if path.is_file()] == [".DS_Store"]
+    assert (root / "downloads" / "unrelated.jpg").is_file()
+    assert result.extras == 2
+    entries = [json.loads(line) for line in result.batch_log.read_text(encoding="utf-8").splitlines()]
+    extras = [e for e in entries if e["kind"] == "extra"]
+    assert {e["to"] for e in extras} == {"Tokyo-Hot/n0610/new01-16-2011.jpg", "Tokyo-Hot/n0610/readme.txt"}
+    assert all(e["ok"] for e in extras)
+    # 回滚把它们也放回去。
+    rollback_batch(connection, paths, result.batch_log)
+    assert (own / "n0610.avi").is_file() and (own / "new01-16-2011.jpg").is_file() and (own / "readme.txt").is_file()
+    assert not target.exists() or not any(target.iterdir())
+
+
+def test_apply_extras_never_overwrite(work_dirs):
+    root, paths, connection = work_dirs
+    (root / "Tokyo-Hot" / "n0610").mkdir(parents=True)
+    (root / "Tokyo-Hot" / "n0610" / "readme.txt").write_bytes(b"already")
+    apply_plan(connection, paths, build_plan(connection, paths, ShelfConfig()))
+    target = root / "Tokyo-Hot" / "n0610"
+    assert (target / "readme.txt").read_bytes() == b"already"
+    assert (target / "readme-1.txt").read_bytes() == b"notes"
+
+
+def test_preview_lists_extras_and_moves_nothing(work_dirs):
+    root, paths, connection = work_dirs
+    lines: list[str] = []
+    stats = preview_organize(connection, paths, ShelfConfig(), progress=lines.append)
+    plan_text = (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8")
+    assert "EXTRA\tTokyo Hot n0610 乙音奈々/new01-16-2011.jpg\tTokyo-Hot/n0610/" in plan_text
+    assert "EXTRA\tTokyo Hot n0610 乙音奈々/readme.txt\tTokyo-Hot/n0610/" in plan_text
+    assert "downloads/unrelated.jpg" not in plan_text
+    assert any("连带 2 个" in line for line in lines)
+    assert (root / "Tokyo Hot n0610 乙音奈々" / "new01-16-2011.jpg").is_file()
+    assert not (root / "Tokyo-Hot").exists()

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 
 [[package]]
@@ -228,7 +228,7 @@ wheels = [
 
 [[package]]
 name = "hidden-shelf"
-version = "0.4.8"
+version = "0.4.11"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
