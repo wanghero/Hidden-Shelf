@@ -33,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--file-template", help="本次使用的文件名模板，如 {code}[-cd{cd}]")
         sub.add_argument("--language", choices=("zh", "en"), help="站点默认语言")
         sub.add_argument("--offline", action="store_true", help="本次跳过联网刮削")
+        sub.add_argument("--dry-run", action="store_true",
+                         help="只预演：列出要搬的文件与原因，不动盘上任何文件（仍会写 .shelf/）")
         sub.add_argument("--force-scrape", action="store_true", help="忽略 7 天与「资料已齐」，全部重问")
         sub.add_argument("--sources", help="本次只问这几家，逗号分隔，如 r18dev,javdb")
         sub.add_argument("--routes", help="整条覆盖来源链，如 \"censored=r18dev,javdb;fc2=fc2\"")
@@ -141,12 +143,21 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     progress = pipeline.ConsoleProgress(verbose=args.verbose)
     _help, steps = COMMANDS[args.command]
-    result = pipeline.run(root, config=config, steps=steps, progress=progress, scrape_options=options)
+    result = pipeline.run(root, config=config, steps=steps, progress=progress, scrape_options=options,
+                          dry_run=args.dry_run)
     if not result.ok:
         print(f"失败于 {pipeline.STEP_LABELS.get(result.failed_step, result.failed_step)}：{result.error}", file=sys.stderr)
         if result.log_path:
             print(f"日志：{result.log_path}", file=sys.stderr)
         return 1
+    if result.dry_run:
+        preview = result.steps.get("organize") or {}
+        if preview.get("dry_run"):
+            print(f"预演完成：{preview['move']} 个要搬，{preview['unchanged']} 个已就位，{preview['skip']} 个跳过；"
+                  f"没有动任何文件，清单：{paths.shelf / preview['plan_file']}")
+        else:
+            print("预演完成：没有动任何文件")
+        return 0
     if result.index_html:
         print(f"成品：{result.index_html}")
     return 0

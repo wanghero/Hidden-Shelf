@@ -20,7 +20,7 @@ from . import db
 from .config import ShelfConfig
 from .local_import import import_local
 from .media import process_assets
-from .organize.apply import organize
+from .organize.apply import organize, preview_organize
 from .paths import ShelfPaths
 from .scan import scan
 from .site.build import build_site
@@ -107,6 +107,20 @@ class RunResult:
     index_html: Path | None = None
     #: 调用方经 `cancel` 回调在步与步之间停下了；`ok` 仍是已跑步骤的结果。
     cancelled: bool = False
+    #: 预演：`organize` 只列清单，`media`、`build` 跳过，`.shelf/` 之外一个字节没动。
+    dry_run: bool = False
+
+
+def _skip_reason(name: str, config: ShelfConfig, scrape_options: ScrapeOptions, dry_run: bool) -> str | None:
+    """这一步该不该跳过；返回原因字符串，不跳过返回 `None`。"""
+    if name == "scrape":
+        if scrape_options.offline:
+            return "--offline"
+        if not config.scrape:
+            return "config.scrape=false"
+    if dry_run and name in ("media", "build"):
+        return "--dry-run"
+    return None
 
 
 def _stats(value) -> dict:
@@ -118,11 +132,14 @@ def _stats(value) -> dict:
 
 def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] = STEPS,
         progress: Progress | None = None, scrape_options: ScrapeOptions | None = None,
-        cancel: Callable[[], bool] | None = None) -> RunResult:
+        cancel: Callable[[], bool] | None = None, dry_run: bool = False) -> RunResult:
     """跑指定步骤。`organize` 之后会自动再 `scan` 一次（路径变了）。
 
     `cancel()` 只在每步开始前检查：为真就不再开后续步，`result.cancelled = True`。步内不打断——归位是事务、
     刮削每个番号后提交，当前步跑完才停，没有半成品。
+
+    `dry_run=True` 是预演：前三步照常（它们只写 `.shelf/`，是算出计划的前提），`organize` 改成
+    `preview_organize` 只列清单且不再 rescan，`media`、`build` 记 `skipped`；盘上 `.shelf/` 之外不动。
     """
     progress = progress or Progress()
     root = Path(root)
@@ -130,7 +147,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
     paths.ensure()
     config = config or ShelfConfig.load(paths)
     scrape_options = scrape_options or ScrapeOptions()
-    result = RunResult()
+    result = RunResult(dry_run=dry_run)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     result.log_path = paths.logs / f"run-{stamp}.log"
     unknown = [name for name in steps if name not in STEPS]
@@ -148,7 +165,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                 write(message)
                 progress.advance(1, message)
 
-            write(f"开始：{root}，步骤 {list(steps)}")
+            write(f"开始：{root}，步骤 {list(steps)}" + ("（预演）" if dry_run else ""))
             for name in steps:
                 if cancel is not None and cancel():
                     result.cancelled = True
@@ -157,8 +174,8 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                     break
                 progress.step(name)
                 write(f"== {name} ==")
-                if name == "scrape" and (not config.scrape or scrape_options.offline):
-                    reason = "--offline" if scrape_options.offline else "config.scrape=false"
+                reason = _skip_reason(name, config, scrape_options, dry_run)
+                if reason is not None:
                     stats = {"skipped": True, "reason": reason}
                     run_id = _run_started(connection, name)
                     _run_finished(connection, run_id, "skipped", stats)
@@ -168,7 +185,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                     continue
                 run_id = _run_started(connection, name)
                 try:
-                    stats = _execute(name, connection, paths, config, emit, scrape_options)
+                    stats = _execute(name, connection, paths, config, emit, scrape_options, dry_run)
                 except Exception as error:  # noqa: BLE001 - 任何一步失败都要记录
                     detail = f"{type(error).__name__}: {error}"
                     write(f"失败：{detail}\n{traceback.format_exc()}")
@@ -185,7 +202,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                 _run_finished(connection, run_id, "ok", stats)
                 write(f"完成：{json.dumps(stats, ensure_ascii=False)}")
                 progress.done(stats)
-            if result.ok and "build" in result.steps:
+            if result.ok and "build" in result.steps and not result.steps["build"].get("skipped"):
                 result.index_html = paths.index_html
     finally:
         connection.close()
@@ -193,7 +210,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
 
 
 def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig, emit,
-             scrape_options: ScrapeOptions) -> dict:
+             scrape_options: ScrapeOptions, dry_run: bool = False) -> dict:
     if name == "scan":
         return _stats(scan(connection, paths, config, progress=emit))
     if name == "import":
@@ -207,6 +224,9 @@ def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, confi
         return _stats(scrape_assets(connection, paths, config, global_config=global_config, progress=emit,
                                     force=scrape_options.force, only_sources=scrape_options.only_sources))
     if name == "organize":
+        if dry_run:
+            # 预演只列清单，路径没变，不用再扫。
+            return preview_organize(connection, paths, config, progress=emit)
         stats = _stats(organize(connection, paths, config, progress=emit))
         # 路径变了，再扫一遍让库与盘一致（也把搬去 未识别/ 的附属文件登记好）。
         rescan = scan(connection, paths, config, progress=emit)

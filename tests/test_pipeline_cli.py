@@ -125,3 +125,39 @@ def test_paths_ensure_turns_erofs_into_root_not_writable(tmp_path: Path, monkeyp
         ShelfPaths(tmp_path).ensure()
     assert "不可写" in str(caught.value) and "只读" in str(caught.value) and str(tmp_path) in str(caught.value)
     assert caught.value.errno == errno.EROFS
+
+
+def _outside_shelf(root: Path) -> set[str]:
+    return {str(p.relative_to(root)) for p in root.rglob("*") if ".shelf" not in p.parts}
+
+
+def test_dry_run_touches_only_shelf_dir(disk):
+    before = _outside_shelf(disk)
+    result = pipeline.run(disk, dry_run=True, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert result.ok and result.dry_run
+    assert _outside_shelf(disk) == before
+    assert not (disk / "index.html").exists() and result.index_html is None
+    assert result.steps["organize"]["dry_run"] is True and result.steps["organize"]["move"] == 3
+    assert "rescan" not in result.steps["organize"]
+    assert result.steps["media"] == {"skipped": True, "reason": "--dry-run"}
+    assert result.steps["build"] == {"skipped": True, "reason": "--dry-run"}
+    assert result.log_path.read_text(encoding="utf-8").splitlines()[0].endswith("（预演）")
+    with sqlite3.connect(disk / ".shelf" / "shelf.db") as connection:
+        assert connection.execute("SELECT status FROM run WHERE step='media'").fetchone()[0] == "skipped"
+        assert connection.execute("SELECT count(*) FROM organize_batch").fetchone()[0] == 0
+
+
+def test_dry_run_then_real_run_matches(disk):
+    preview = pipeline.run(disk, dry_run=True, scrape_options=pipeline.ScrapeOptions(offline=True))
+    real = pipeline.run(disk, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert real.ok and not real.dry_run
+    assert real.steps["organize"]["moved"] == preview.steps["organize"]["move"]
+    assert (disk / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
+
+
+def test_cli_dry_run_prints_summary(disk, capsys):
+    assert cli.main(["run", str(disk), "--dry-run", "--offline"]) == 0
+    out = capsys.readouterr().out
+    assert "预演完成" in out and "没有动任何文件" in out and "plan-" in out
+    assert "成品：" not in out
+    assert not (disk / "Prestige").exists()
