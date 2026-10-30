@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **先做计划 6**（`2026-10-29-plan-6-visible-data-dir.md`，资料目录 `HiddenShelf/` 改为可见的 `HiddenShelf/`），再做本计划。本计划里凡写 `HiddenShelf/` 的地方都读作 `HiddenShelf/`，代码里用 `paths.SHELF_DIR`。每个任务提交 +0.0.1（`pyproject.toml`、`src/hidden_shelf/__init__.py`、`tests/test_smoke.py` 三处同改），接着计划 6 的最后一个版本号往上数，最后一个任务升到 **0.4.0**。提交信息中文。
+- **先做计划 6**（`2026-10-29-plan-6-visible-data-dir.md`，资料目录 `.shelf/` 改为可见的 `HiddenShelf/`），再做本计划。本计划里的 `HiddenShelf/` 就是改名后的资料目录（原 `.shelf/`），代码里用 `paths.SHELF_DIR`。每个任务提交 +0.0.1（`pyproject.toml`、`src/hidden_shelf/__init__.py`、`tests/test_smoke.py` 三处同改），接着计划 6 的最后一个版本号往上数，最后一个任务升到 **0.4.0**。提交信息中文。
 - 测试永不联网（`tests/conftest.py` 的 `isolated_home`）；CI 里也不许联网。
 - 预演的承诺要能被测试钉住：**`HiddenShelf/` 之外一个字节都不改**（扫描、导入、刮削照常写 `HiddenShelf/`，这是算出计划的前提，文档里要如实写）。
 - 文档里不出现作者本机的私有路径（`~/Claude-Code/...`、`~/.claude/...`、`/Volumes/Seagate-8T/...`）。截图已由本机准备好：`docs/images/wall.jpg`（海报墙）、`docs/images/progress.jpg`（进度网页）、`docs/images/picker.jpg`（目录选择器），都来自演示数据，直接引用，不要重新生成。
