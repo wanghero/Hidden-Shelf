@@ -8,6 +8,27 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LOG="${HIDDEN_SHELF_HOME:-$HOME/.hidden-shelf}/serve.log"
 mkdir -p "$(dirname "$LOG")"
 
+# 先看代码是不是最新的：落后 origin/main 就拉下来并装依赖；云端分支有更高版本还没合并就提醒。
+cd "$REPO"
+if git fetch -q origin 2>/dev/null; then
+  LOCAL_VER=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+  if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ] && git merge-base --is-ancestor HEAD origin/main; then
+    echo "本地落后 origin/main，正在更新…"
+    git pull -q --ff-only origin main && uv sync -q
+    echo "已更新：v${LOCAL_VER} → v$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)"
+  else
+    echo "代码已是最新（v${LOCAL_VER}）"
+  fi
+  MAIN_VER=$(git show origin/main:pyproject.toml | grep -m1 '^version' | cut -d'"' -f2)
+  for b in $(git branch -r --list 'origin/claude/*'); do
+    BV=$(git show "$b:pyproject.toml" 2>/dev/null | grep -m1 '^version' | cut -d'"' -f2 || true)
+    [ -n "$BV" ] && [ "$(printf '%s\n%s\n' "$MAIN_VER" "$BV" | sort -V | tail -1)" = "$BV" ] && [ "$BV" != "$MAIN_VER" ] \
+      && echo "提醒：云端分支 ${b#origin/} 已到 v${BV}，还没合并进 main（gh pr list 看看）"
+  done
+else
+  echo "连不上 GitHub，跳过版本检查"
+fi
+
 pkill -f "shelf serve" 2>/dev/null && echo "已停掉旧的 shelf serve" || true
 for _ in $(seq 1 20); do
   lsof -iTCP:"$PORT" -sTCP:LISTEN -nP >/dev/null 2>&1 || break
