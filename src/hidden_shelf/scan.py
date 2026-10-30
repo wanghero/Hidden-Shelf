@@ -5,7 +5,7 @@
 `vanished=1`，见到的恢复 0；不删行。
 
 遍历用显式栈加 `os.scandir`（peach `scan._walk` 的思路），每进一个目录报一次进度。
-跳过 `.shelf/` 与系统垃圾；`未识别/` 照常遍历，认不出番号的标 `content_type='unrecognized'`。
+跳过资料目录 `HiddenShelf/` 与系统垃圾；`未识别/` 照常遍历，认不出番号的标 `content_type='unrecognized'`。
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .config import ShelfConfig
 from .field_owners import SCAN_FILENAME, FieldWrite, write_owned_fields
-from .paths import ShelfPaths
+from .paths import SHELF_DIR, ShelfPaths
 from .rules.codes import (
     is_amateur_code,
     is_jav_code,
@@ -31,9 +31,9 @@ from .rules.codes import (
 )
 from .rules.sidecars import ARTWORK, ARTWORK_DIRS, medium_of, sidecar_kind, video_stems
 
-#: 不进入的目录名（大小写不敏感）。`.shelf` 是我们自己的产物目录。
+#: 不进入的目录名（大小写不敏感）。`SHELF_DIR` 是我们自己的产物目录。
 SKIP_DIRS = frozenset(name.casefold() for name in (
-    ".shelf", "@eadir", "@snapshot", "#recycle", "$recycle.bin", "system volume information",
+    SHELF_DIR, "@eadir", "@snapshot", "#recycle", "$recycle.bin", "system volume information",
     ".trashes", ".spotlight-v100", ".fseventsd", "lost+found",
 ))
 #: 不登记的文件名。

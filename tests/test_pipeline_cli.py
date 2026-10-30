@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from hidden_shelf import cli, pipeline
-from hidden_shelf.paths import ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 
 
 @pytest.fixture
@@ -31,15 +31,15 @@ def test_run_end_to_end(disk):
     assert (disk / "未识别" / "c" / "随手拍.mp4").is_file()
     for name in ("a", "b", "c"):
         assert not (disk / name).exists(), name
-    legacy = disk / ".shelf" / "legacy" / "ABP-758"
+    legacy = disk / SHELF_DIR / "legacy" / "ABP-758"
     assert (legacy / "ABP-758.nfo").is_file() and (legacy / "ABP-758-poster.jpg").is_file()
-    assert (disk / ".shelf" / "sheets" / "ABP-758.jpg").is_file()
-    assert (disk / ".shelf" / "covers" / "ABP-758.jpg").is_file()
+    assert (disk / SHELF_DIR / "sheets" / "ABP-758.jpg").is_file()
+    assert (disk / SHELF_DIR / "covers" / "ABP-758.jpg").is_file()
     assert (disk / "index.html").is_file()
-    assert '"ABP-758"' in (disk / ".shelf" / "site" / "data" / "works.js").read_text(encoding="utf-8")
+    assert '"ABP-758"' in (disk / SHELF_DIR / "site" / "data" / "works.js").read_text(encoding="utf-8")
     assert result.log_path and result.log_path.is_file()
     assert result.index_html == disk / "index.html"
-    with sqlite3.connect(disk / ".shelf" / "shelf.db") as connection:
+    with sqlite3.connect(disk / SHELF_DIR / "shelf.db") as connection:
         runs = connection.execute("SELECT step,status FROM run ORDER BY id").fetchall()
         assert runs == [("scan", "ok"), ("import", "ok"), ("scrape", "ok"), ("organize", "ok"), ("media", "ok"), ("build", "ok")]
         assert connection.execute("SELECT count(*) FROM asset WHERE vanished=1").fetchone()[0] == 0
@@ -70,7 +70,7 @@ def test_run_records_failure(disk, monkeypatch):
     result = pipeline.run(disk)
     assert not result.ok and result.failed_step == "build" and "炸了" in result.error
     assert {"scan", "import", "organize", "media"} <= set(result.steps)
-    with sqlite3.connect(disk / ".shelf" / "shelf.db") as connection:
+    with sqlite3.connect(disk / SHELF_DIR / "shelf.db") as connection:
         assert connection.execute("SELECT status FROM run WHERE step='build'").fetchone()[0] == "failed"
 
 
@@ -106,12 +106,12 @@ def test_cli_version(capsys):
 
 
 def test_cli_readonly_root_exit_2_with_hint(tmp_path: Path, capsys, monkeypatch):
-    """盘不可写（macOS 只读挂载的 NTFS 盘最常见）：开跑之前就说清楚，不让它跑到建 .shelf 时才炸。"""
+    """盘不可写（macOS 只读挂载的 NTFS 盘最常见）：开跑之前就说清楚，不让它跑到建资料目录时才炸。"""
     import os
     monkeypatch.setattr(os, "access", lambda path, mode, **kw: not (mode & os.W_OK))
     assert cli.main(["run", str(tmp_path)]) == 2
     err = capsys.readouterr().err
-    assert "不可写" in err and "NTFS" in err and ".shelf" in err and str(tmp_path) in err
+    assert "不可写" in err and "NTFS" in err and SHELF_DIR in err and str(tmp_path) in err
 
 
 def test_paths_ensure_turns_erofs_into_root_not_writable(tmp_path: Path, monkeypatch):
@@ -125,3 +125,61 @@ def test_paths_ensure_turns_erofs_into_root_not_writable(tmp_path: Path, monkeyp
         ShelfPaths(tmp_path).ensure()
     assert "不可写" in str(caught.value) and "只读" in str(caught.value) and str(tmp_path) in str(caught.value)
     assert caught.value.errno == errno.EROFS
+
+
+def _outside_shelf(root: Path) -> set[str]:
+    return {str(p.relative_to(root)) for p in root.rglob("*") if SHELF_DIR not in p.parts}
+
+
+def test_dry_run_touches_only_shelf_dir(disk):
+    before = _outside_shelf(disk)
+    result = pipeline.run(disk, dry_run=True, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert result.ok and result.dry_run
+    assert _outside_shelf(disk) == before
+    assert not (disk / "index.html").exists() and result.index_html is None
+    assert result.steps["organize"]["dry_run"] is True and result.steps["organize"]["move"] == 3
+    assert "rescan" not in result.steps["organize"]
+    assert result.steps["media"] == {"skipped": True, "reason": "--dry-run"}
+    assert result.steps["build"] == {"skipped": True, "reason": "--dry-run"}
+    assert result.log_path.read_text(encoding="utf-8").splitlines()[0].endswith("（预演）")
+    with sqlite3.connect(disk / SHELF_DIR / "shelf.db") as connection:
+        assert connection.execute("SELECT status FROM run WHERE step='media'").fetchone()[0] == "skipped"
+        assert connection.execute("SELECT count(*) FROM organize_batch").fetchone()[0] == 0
+
+
+def test_dry_run_then_real_run_matches(disk):
+    preview = pipeline.run(disk, dry_run=True, scrape_options=pipeline.ScrapeOptions(offline=True))
+    real = pipeline.run(disk, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert real.ok and not real.dry_run
+    assert real.steps["organize"]["moved"] == preview.steps["organize"]["move"]
+    assert (disk / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
+
+
+def test_cli_dry_run_prints_summary(disk, capsys):
+    assert cli.main(["run", str(disk), "--dry-run", "--offline"]) == 0
+    out = capsys.readouterr().out
+    assert "预演完成" in out and "没有动任何文件" in out and "plan-" in out
+    assert "成品：" not in out
+    assert not (disk / "Prestige").exists()
+
+
+def test_cli_both_dirs_exit_2(tmp_path: Path, capsys):
+    (tmp_path / ".shelf").mkdir()
+    (tmp_path / "HiddenShelf").mkdir()
+    assert cli.main(["scan", str(tmp_path)]) == 2
+    assert "同时有" in capsys.readouterr().err
+    assert (tmp_path / ".shelf").is_dir() and (tmp_path / "HiddenShelf").is_dir()
+
+
+def test_run_migrates_legacy_dir_and_logs(tmp_root: Path, fake_video):
+    """老盘：任何子命令开跑都先把 .shelf/ 改名，日志里记一行，之后一切照旧。"""
+    fake_video(tmp_root / "a" / "ABP-758.mp4")
+    (tmp_root / ".shelf" / "sources").mkdir(parents=True)
+    (tmp_root / ".shelf" / "marker.txt").write_text("old", encoding="utf-8")
+    result = pipeline.run(tmp_root, steps=("scan",))
+    assert result.ok
+    assert not (tmp_root / ".shelf").exists()
+    assert (tmp_root / SHELF_DIR / "marker.txt").read_text(encoding="utf-8") == "old"
+    assert result.log_path.is_relative_to(tmp_root / SHELF_DIR)
+    text = result.log_path.read_text(encoding="utf-8")
+    assert "已把 .shelf/ 改名为 HiddenShelf/" in text and "请重新出站" in text

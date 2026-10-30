@@ -2,7 +2,7 @@
 
 思路取自 peach `src/peach/organize.py` 的 `_rename`、`_move_one`、`apply_plan`、`rollback_batch`
 （commit 4d5266d327a5971773409b44316e3926bd37c6ba，AGPL-3.0-or-later），按本项目重写：
-单盘根、POSIX 相对路径、逐行 JSONL 批次日志、附属文件随视频搬去 `.shelf/legacy/<番号>/`
+单盘根、POSIX 相对路径、逐行 JSONL 批次日志、附属文件随视频搬去 `HiddenShelf/legacy/<番号>/`
 或跟着未识别视频进 `未识别/`。
 
 只做同一卷内 `os.rename`，绝不删原始文件，绝不覆盖已存在的目标。
@@ -20,12 +20,14 @@ from datetime import datetime
 from pathlib import Path
 
 from ..config import ShelfConfig
-from ..paths import UNRECOGNIZED_DIR, ShelfPaths
+from ..paths import SHELF_DIR, UNRECOGNIZED_DIR, ShelfPaths
 from .plan import SKIP_TARGET_EXISTS, Plan, build_plan
 
 Progress = Callable[[str], None]
 #: 只保留最近这么多份库备份。
 BACKUP_KEEP = 5
+#: 预演时终端最多打这么多条「现路径 → 目标」，其余只进清单文件（整块盘几万条会把终端刷死）。
+PREVIEW_CONSOLE_LIMIT = 200
 
 
 class OrganizeError(RuntimeError):
@@ -203,17 +205,18 @@ def _move_one(connection, paths, asset_id: int, old_path: str, new_path: str) ->
 
 
 def remove_empty_dirs(root: Path, *, protect: set[Path] | None = None) -> int:
-    """自底向上删空目录。只删空的；`.shelf`、`未识别`、root 本身与 `protect` 不删。
+    """自底向上删空目录。只删空的；资料目录 `HiddenShelf`、`未识别`、root 本身与 `protect` 不删。
 
     只有 `.DS_Store` 的目录视为空：先删 `.DS_Store` 再删目录。
     """
-    protected = {root.resolve(), (root / ".shelf").resolve(), (root / UNRECOGNIZED_DIR).resolve()}
+    shelf = (root / SHELF_DIR).resolve()
+    protected = {root.resolve(), shelf, (root / UNRECOGNIZED_DIR).resolve()}
     protected |= {path.resolve() for path in (protect or set())}
     removed = 0
     for current, dirs, files in os.walk(root, topdown=False):
         directory = Path(current)
         resolved = directory.resolve()
-        if resolved in protected or resolved.is_relative_to((root / ".shelf").resolve()):
+        if resolved in protected or resolved.is_relative_to(shelf):
             continue
         if files and all(name == ".DS_Store" for name in files):
             for name in files:
@@ -275,3 +278,54 @@ def organize(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfCon
     progress(f"归位完成：搬了 {result.moved} 个，跳过 {result.skipped} 个，失败 {result.failed} 个，"
              f"清掉空目录 {result.removed_dirs} 个")
     return result
+
+
+def _write_plan_file(paths: ShelfPaths, plan: Plan) -> Path:
+    """把整份计划写进 `logs/plan-<时间>.txt`：首行是汇总，之后每行 `MOVE\\t现路径\\t目标` 或 `SKIP\\t现路径\\t原因`。"""
+    paths.logs.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    plan_path = paths.logs / f"plan-{stamp}.txt"
+    counter = 1
+    while plan_path.exists():
+        plan_path = paths.logs / f"plan-{stamp}-{counter}.txt"
+        counter += 1
+    counts = plan.counts
+    lines = [f"# Hidden Shelf 归位预演 {datetime.now().isoformat(timespec='seconds')}  "
+             f"要搬 {counts['move']} / 已就位 {counts['unchanged']} / 跳过 {counts['skip']}"]
+    for row in plan.rows:
+        if row.action == "move":
+            lines.append(f"MOVE\t{row.current_path}\t{row.target_path}")
+        else:
+            lines.append(f"SKIP\t{row.current_path}\t{row.reason}")
+    plan_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return plan_path
+
+
+def preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig, *,
+                     progress: Progress = lambda message: None) -> dict:
+    """归位预演：算出和 `organize` 一样的计划，只打印、只写清单文件，盘上一个文件不动。
+
+    不备份库、不改名、不清空目录、不记 `organize_batch`。返回的字典就是流水线里这一步的 stats。
+    """
+    plan = build_plan(connection, paths, config)
+    counts = plan.counts
+    progress(f"预演：{counts['move']} 个要搬，{counts['unchanged']} 个已就位，{counts['skip']} 个跳过")
+    for reason, count in sorted(plan.reasons.items()):
+        progress(f"  跳过原因 {reason}：{count}")
+    plan_path = _write_plan_file(paths, plan)
+    shown = paths.relative(plan_path)
+    moves = plan.moves
+    for index, row in enumerate(moves[:PREVIEW_CONSOLE_LIMIT], 1):
+        progress(f"[{index}/{len(moves)}] {row.current_path} → {row.target_path}")
+    if len(moves) > PREVIEW_CONSOLE_LIMIT:
+        progress(f"……还有 {len(moves) - PREVIEW_CONSOLE_LIMIT} 条，完整清单见 {shown}")
+    progress(f"预演完成：没有动任何文件，清单：{shown}")
+    return {
+        "dry_run": True,
+        "total": counts["total"],
+        "move": counts["move"],
+        "unchanged": counts["unchanged"],
+        "skip": counts["skip"],
+        "reasons": dict(sorted(plan.reasons.items())),
+        "plan_file": paths.shelf_relative(plan_path),
+    }

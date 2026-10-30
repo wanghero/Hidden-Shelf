@@ -3,7 +3,7 @@
 思路取自 peach `src/peach/scraping_access.py`（commit 4d5266d327a5971773409b44316e3926bd37c6ba，
 AGPL-3.0-or-later）：`SOURCES` 只留本项目接了的 8 站；403 首停 `FIRST_BLOCKED_PAUSE` 连着再撞
 翻倍到该站上限，429 按 `Retry-After`；通了一次就清记录。去掉浏览器传输、凭据库、流量计费与
-`via` 两条路的区分。冷却记录住在 `.shelf/sources/_cooldown.json`，一盘一份。
+`via` 两条路的区分。冷却记录住在 `HiddenShelf/sources/_cooldown.json`，一盘一份。
 """
 from __future__ import annotations
 

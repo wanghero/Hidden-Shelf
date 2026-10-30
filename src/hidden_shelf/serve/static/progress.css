@@ -1,5 +1,7 @@
 /* 藏片阁 进度网页样式。只引用 tokens.css 变量：无裸色值、字号、间距、圆角、阴影。 */
 
+/* 带 display 的类（.button、.result）会盖过浏览器自带的 [hidden]，这里统一压回去。 */
+[hidden] { display: none !important; }
 .icon { display: inline-flex; width: 18px; height: 18px; flex: none; }
 .icon svg { width: 100%; height: 100%; }
 .mono { font-family: var(--font-mono); }

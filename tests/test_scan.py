@@ -8,14 +8,14 @@ import pytest
 from hidden_shelf import db
 from hidden_shelf.config import ShelfConfig
 from hidden_shelf.field_owners import USER_MANUAL, FieldWrite, owner_of, write_owned_fields
-from hidden_shelf.paths import ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 from hidden_shelf.scan import scan
 
 TREE = (
     "a/ABP-758.mp4", "a/ABP-758-poster.jpg", "a/ABP-758.nfo",
     "b/259LUXU-1475-cd1.mp4", "b/259LUXU-1475-cd2.mp4",
     "c/随手拍.mp4",
-    ".shelf/x.mp4", ".shelf/covers/ABP-758.jpg",
+    f"{SHELF_DIR}/x.mp4", f"{SHELF_DIR}/covers/ABP-758.jpg",
     "a/.DS_Store", "a/._ABP-758.mp4", "@eaDir/ABP-758.mp4", "$RECYCLE.BIN/x.mp4",
     "System Volume Information/y.mp4",
 )
@@ -73,9 +73,9 @@ def test_scan_skips_shelf_and_system_dirs(disk):
     root, paths, connection = disk
     scan(connection, paths, ShelfConfig())
     for path in _assets(connection):
-        assert not path.startswith((".shelf/", "@eaDir/", "$RECYCLE.BIN/", "System Volume Information/"))
+        assert not path.startswith((f"{SHELF_DIR}/", "@eaDir/", "$RECYCLE.BIN/", "System Volume Information/"))
         assert "/._" not in path
-    assert connection.execute("SELECT count(*) FROM sidecar WHERE path LIKE '.shelf/%'").fetchone()[0] == 0
+    assert connection.execute("SELECT count(*) FROM sidecar WHERE path LIKE ?", (f"{SHELF_DIR}/%",)).fetchone()[0] == 0
 
 
 def test_rescan_marks_vanished(disk):
@@ -168,3 +168,22 @@ def test_progress_is_called(disk):
     messages: list[str] = []
     scan(connection, paths, ShelfConfig(), progress=messages.append)
     assert messages
+
+
+def test_scan_skips_visible_shelf_dir(tmp_root: Path):
+    """`HiddenShelf/` 整目录跳过：legacy 里的 NFO 与 jpg、sheets 里故意放的 .mp4 都不能登记。"""
+    for rel in (f"{SHELF_DIR}/legacy/X/X.nfo", f"{SHELF_DIR}/covers/X.jpg", f"{SHELF_DIR}/sheets/ABP-758.mp4",
+                "a/ABP-758.mp4"):
+        target = tmp_root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"0" * 16)
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        result = scan(connection, paths, ShelfConfig())
+        assert result.seen == 1
+        for table in ("asset", "sidecar"):
+            rows = connection.execute(f"SELECT path FROM {table}").fetchall()
+            assert not any(row["path"].startswith(f"{SHELF_DIR}/") for row in rows), table
+    finally:
+        connection.close()

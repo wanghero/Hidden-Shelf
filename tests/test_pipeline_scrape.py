@@ -25,7 +25,7 @@ def disk(tmp_root: Path, fake_video):
 
 
 def _runs(disk):
-    with sqlite3.connect(disk / ".shelf" / "shelf.db") as connection:
+    with sqlite3.connect(disk / "HiddenShelf" / "shelf.db") as connection:
         return connection.execute("SELECT step,status FROM run ORDER BY id").fetchall()
 
 
@@ -119,6 +119,6 @@ def test_site_build_performer_avatar_and_sources(tmp_root: Path):
     finally:
         connection.close()
     performers = read_data_js(paths.site_data / "entities.js")["performers"]
-    assert {item["name"]: item["avatar"] for item in performers} == {"涼森れむ": f".shelf/avatars/{remu}.jpg"}
+    assert {item["name"]: item["avatar"] for item in performers} == {"涼森れむ": f"HiddenShelf/avatars/{remu}.jpg"}
     works = read_data_js(paths.site_data / "works.js")
     assert works[0]["sources"] == [{"source": "r18dev", "url": "https://r18.dev/videos/vod/movies/detail/-/dvd_id=ABW-358/json"}]

@@ -4,7 +4,7 @@
 commit 4d5266d327a5971773409b44316e3926bd37c6ba，AGPL-3.0-or-later。本项目每站各是一档、逐家短路
 （用户 2026-10-29 决定「有一家答了就停」），没有复核队列，结算直接落库。
 
-一趟的部件：`Cooldown`（按站冷却，`.shelf/sources/_cooldown.json`）、`Snapshots`（原始快照与「没有」，7 天）、
+一趟的部件：`Cooldown`（按站冷却，`HiddenShelf/sources/_cooldown.json`）、`Snapshots`（原始快照与「没有」，7 天）、
 `SourceTransport`（按站 Cookie、主机间隔、预算）。`transport` 可注入假传输（测试）。
 """
 from __future__ import annotations

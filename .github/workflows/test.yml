@@ -1,0 +1,33 @@
+# 三平台跑全部测试：Python（pytest，依赖系统 ffmpeg，缺则部分 skip）与前端纯逻辑（node --test）。
+# 测试永不联网（tests/conftest.py 的 isolated_home 把全局配置落到临时目录并停用全部来源），CI 里也不许联网。
+# Windows 这一路允许失败（continue-on-error）：作者没有 Windows 机器，只在 macOS 验证过，
+# 先看 CI 的结果再决定修什么；等它稳定了再把这一行去掉。
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # setup-ffmpeg@v3 只有 x64 包，macos-latest 已是 arm64（它会直接报「Unsupported architecture」），macOS 改用 Homebrew。
+      - if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - if: runner.os != 'macOS'
+        uses: FedericoCarboni/setup-ffmpeg@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: uv sync --frozen
+      - run: uv run pytest -q
+      - run: node --test "tests/js/**/*.test.mjs"

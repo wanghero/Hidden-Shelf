@@ -51,7 +51,7 @@ def fake_steps(monkeypatch):
 
 
 def _runs(root):
-    with sqlite3.connect(root / ".shelf" / "shelf.db") as connection:
+    with sqlite3.connect(root / "HiddenShelf" / "shelf.db") as connection:
         return connection.execute("SELECT step,status FROM run ORDER BY id").fetchall()
 
 

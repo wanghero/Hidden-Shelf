@@ -18,7 +18,7 @@ from .. import pipeline
 from ..config import ShelfConfig
 from ..fsutil import atomic_write_text
 from ..netconfig import home as config_home
-from ..paths import RootNotWritable, ShelfPaths, check_writable
+from ..paths import RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable
 from .events import Event, EventProgress, RunLog
 
 RECENT_LIMIT = 10
@@ -35,6 +35,8 @@ class RunOptions:
     move_unrecognized: bool = True
     offline: bool = False
     force_scrape: bool = False
+    #: 只预演：归位只列清单，媒体与出站跳过，`HiddenShelf/` 之外不动。
+    dry_run: bool = False
     steps: tuple[str, ...] = pipeline.STEPS
 
     @classmethod
@@ -50,10 +52,12 @@ class RunOptions:
             raise ValueError(f"盘根目录不存在或不是目录：{raw_root}")
         try:
             check_writable(root)
-        except RootNotWritable as error:
+            check_layout(root)
+        except (RootNotWritable, ShelfLayoutConflict) as error:
             raise ValueError(str(error)) from None
         flags = {}
-        for key, default in (("move_unrecognized", True), ("offline", False), ("force_scrape", False)):
+        for key, default in (("move_unrecognized", True), ("offline", False), ("force_scrape", False),
+                             ("dry_run", False)):
             value = data.get(key, default)
             if not isinstance(value, bool):
                 raise ValueError(f"{key} 要是 true 或 false")
@@ -66,7 +70,7 @@ class RunOptions:
 
     def to_dict(self) -> dict:
         return {"root": str(self.root), "move_unrecognized": self.move_unrecognized, "offline": self.offline,
-                "force_scrape": self.force_scrape, "steps": list(self.steps)}
+                "force_scrape": self.force_scrape, "dry_run": self.dry_run, "steps": list(self.steps)}
 
 
 def _plain(value: Any) -> Any:
@@ -171,7 +175,8 @@ class RunManager:
             config.move_unrecognized = options.move_unrecognized
             scrape_options = pipeline.ScrapeOptions(offline=options.offline, force=options.force_scrape)
             result = self.run_pipeline(options.root, config=config, steps=options.steps, progress=EventProgress(log),
-                                       scrape_options=scrape_options, cancel=self._cancel.is_set)
+                                       scrape_options=scrape_options, cancel=self._cancel.is_set,
+                                       dry_run=options.dry_run)
             stats = _plain(result)
             log.append("run.cancelled" if getattr(result, "cancelled", False) else "run.done", stats=stats)
         except Exception as error:  # noqa: BLE001 - 线程里的异常要落成事件，不能静默消失

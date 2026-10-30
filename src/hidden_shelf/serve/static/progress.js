@@ -153,6 +153,7 @@
     if (event.kind === 'run.done' || event.kind === 'run.cancelled') {
       disconnect();
       if (event.kind === 'run.cancelled') toast('info', t('toast.cancelled'));
+      else if (state.result && state.result.ok && state.result.dry_run) toast('success', t('toast.dry_run'));
       else if (state.result && state.result.ok) toast('success', t('toast.done'));
       else if (state.result && !state.result.failed_step) toast('danger', t('toast.failed.setup'), true);
       else toast('danger', t('toast.failed', { step: stepLabel(state.result && state.result.failed_step) }), true);
@@ -187,7 +188,7 @@
     showFieldError('');
     starting = true;
     update();
-    api('POST', '/api/run', { root: root, move_unrecognized: refs.move.checked, offline: refs.offline.checked, force_scrape: refs.force.checked })
+    api('POST', '/api/run', { root: root, move_unrecognized: refs.move.checked, offline: refs.offline.checked, force_scrape: refs.force.checked, dry_run: refs.dryRun.checked })
       .then(function (response) {
         starting = false;
         if (response.status === 202) {
@@ -493,6 +494,7 @@
       h('div', { class: 'switches' },
         toggle('move', 'form.move', refs.moveValue == null ? true : refs.moveValue),
         toggle('offline', 'form.offline', !!refs.offlineValue),
+        toggle('dryRun', 'form.dry_run', !!refs.dryRunValue),
         toggle('force', 'form.force', !!refs.forceValue)),
       h('div', { class: 'form-actions' }, refs.startButton, refs.openButton, refs.formNote));
   }
@@ -568,7 +570,7 @@
   function update() {
     if (!refs.root) return;
     // 页头状态
-    var headKey = state.running ? 'page.running' : !state.result ? 'page.idle' : state.result.cancelled ? 'page.cancelled' : state.result.ok ? 'page.done' : 'page.failed';
+    var headKey = state.running ? 'page.running' : !state.result ? 'page.idle' : state.result.cancelled ? 'page.cancelled' : state.result.ok ? (state.result.dry_run ? 'page.dry_run' : 'page.done') : 'page.failed';
     var headDot = state.running ? 'running' : !state.result ? '' : state.result.cancelled ? 'skipped' : state.result.ok ? 'done' : 'failed';
     clear(refs.headSub);
     refs.headSub.appendChild(h('span', { class: 'dot ' + headDot, 'aria-hidden': 'true' }));
@@ -578,8 +580,8 @@
     recentRoots.forEach(function (root) { refs.recent.appendChild(h('option', { value: root })); });
     if (!refs.rootValue && !refs.root.value) refs.root.value = state.root || recentRoots[0] || '';
     var busy = state.running || starting;
-    [refs.root, refs.move, refs.offline, refs.force].forEach(function (input) { input.disabled = busy; });
-    refs.moveValue = refs.move.checked; refs.offlineValue = refs.offline.checked; refs.forceValue = refs.force.checked;
+    [refs.root, refs.move, refs.offline, refs.dryRun, refs.force].forEach(function (input) { input.disabled = busy; });
+    refs.moveValue = refs.move.checked; refs.offlineValue = refs.offline.checked; refs.forceValue = refs.force.checked; refs.dryRunValue = refs.dryRun.checked;
     clear(refs.startButton);
     refs.startButton.className = 'button large' + (state.running ? ' secondary' : '');
     refs.startButton.setAttribute('aria-busy', starting ? 'true' : 'false');
@@ -614,8 +616,8 @@
     refs.resultBox.hidden = state.running || !state.result;
     if (!refs.resultBox.hidden) {
       var result = state.result;
-      // 没有 failed_step 的失败发生在第一步之前（建 .shelf、开库），比如盘是只读的。
-      var text = result.cancelled ? t('result.cancelled') : result.ok ? t('result.ok')
+      // 没有 failed_step 的失败发生在第一步之前（建 HiddenShelf、开库），比如盘是只读的。
+      var text = result.cancelled ? t('result.cancelled') : result.ok ? (result.dry_run ? t('result.dry_run') : t('result.ok'))
         : result.failed_step ? t('result.failed', { step: stepLabel(result.failed_step), error: result.error || '' }) : t('result.failed.setup', { error: result.error || '' });
       refs.resultBox.appendChild(h('h3', { class: 'card-title', text: t('result.title') }));
       refs.resultBox.appendChild(h('p', { class: 'result-text' + (result.ok ? '' : ' failed'), text: text }));

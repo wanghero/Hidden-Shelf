@@ -15,11 +15,12 @@ from hidden_shelf.organize.apply import (
     apply_plan,
     backup_database,
     organize,
+    preview_organize,
     remove_empty_dirs,
     rollback_batch,
 )
 from hidden_shelf.organize.plan import SKIP_TARGET_EXISTS, build_plan
-from hidden_shelf.paths import ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 from hidden_shelf.scan import scan
 
 
@@ -114,8 +115,8 @@ def test_apply_sidecars_go_to_legacy(disk):
     assert not any(path.suffix in (".jpg", ".nfo") for path in (root / "Prestige").rglob("*"))
     rows = {r["path"]: r for r in connection.execute("SELECT path,status,moved_to FROM sidecar")}
     assert rows["a/ABP-758.nfo"]["status"] == "moved"
-    assert rows["a/ABP-758.nfo"]["moved_to"] == ".shelf/legacy/ABP-758/ABP-758.nfo"
-    assert rows["a/ABP-758-poster.jpg"]["moved_to"] == ".shelf/legacy/ABP-758/ABP-758-poster.jpg"
+    assert rows["a/ABP-758.nfo"]["moved_to"] == f"{SHELF_DIR}/legacy/ABP-758/ABP-758.nfo"
+    assert rows["a/ABP-758-poster.jpg"]["moved_to"] == f"{SHELF_DIR}/legacy/ABP-758/ABP-758-poster.jpg"
     # 导入的封面还在。
     assert (paths.covers / "ABP-758.jpg").is_file()
 
@@ -160,7 +161,7 @@ def test_remove_empty_dirs(disk):
         assert not (root / name).exists(), name
     # `未识别/` 本身不删，它下面的空目录照删。
     assert (root / "未识别").is_dir() and not (root / "未识别" / "stays").exists()
-    assert paths.sources.is_dir()  # .shelf 下的空目录不动
+    assert paths.sources.is_dir()  # 资料目录下的空目录不动
     assert root.is_dir()
 
 
@@ -198,3 +199,48 @@ def test_organize_reports_progress(disk):
     messages: list[str] = []
     organize(connection, paths, ShelfConfig(), progress=messages.append)
     assert any("归位完成" in message for message in messages)
+
+
+def _snapshot(root: Path) -> dict[str, int]:
+    """盘上资料目录之外每个文件的大小；预演前后必须一模一样。"""
+    return {str(p.relative_to(root)): p.stat().st_size
+            for p in root.rglob("*") if p.is_file() and SHELF_DIR not in p.parts}
+
+
+def test_preview_moves_nothing_and_writes_plan_file(disk):
+    root, paths, connection = disk
+    before = _snapshot(root)
+    lines = []
+    stats = preview_organize(connection, paths, ShelfConfig(), progress=lines.append)
+    assert _snapshot(root) == before
+    assert stats["dry_run"] is True and stats["move"] == 4 and stats["skip"] == 0
+    assert not list(paths.backups.glob("shelf-*.db"))
+    assert connection.execute("SELECT count(*) FROM organize_batch").fetchone()[0] == 0
+    plan_file = paths.shelf / stats["plan_file"]
+    text = plan_file.read_text(encoding="utf-8")
+    assert "MOVE\ta/ABP-758.mp4\tPrestige/ABP-758/ABP-758.mp4" in text
+    assert any("a/ABP-758.mp4 → Prestige/ABP-758/ABP-758.mp4" in line for line in lines)
+    assert any(line.startswith("预演：4 个要搬") for line in lines)
+    assert any(line.startswith("预演完成：没有动任何文件") for line in lines)
+
+
+def test_preview_reports_bad_template(disk):
+    root, paths, connection = disk
+    lines = []
+    stats = preview_organize(connection, paths, ShelfConfig(dir_template="{nope"), progress=lines.append)
+    # 有番号的 3 个都因模板跳过；未识别那个不走模板，照常算作要搬去 未识别/（build_plan 的真实判据）。
+    assert stats["move"] == 1 and stats["skip"] == 3
+    assert not (root / "未识别").exists()
+    assert any(reason.startswith("模板不合法") for reason in stats["reasons"])
+    assert "SKIP\t" in (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8")
+
+
+def test_preview_caps_console_lines_but_writes_full_file(disk, monkeypatch):
+    root, paths, connection = disk
+    monkeypatch.setattr(apply_module, "PREVIEW_CONSOLE_LIMIT", 2)
+    lines = []
+    stats = preview_organize(connection, paths, ShelfConfig(), progress=lines.append)
+    moves = [line for line in lines if " → " in line]
+    assert len(moves) == 2
+    assert any("还有 2 条" in line for line in lines)
+    assert (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8").count("MOVE\t") == 4

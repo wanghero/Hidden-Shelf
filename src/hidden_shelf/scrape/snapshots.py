@@ -1,4 +1,4 @@
-"""原始快照 `.shelf/sources/<番号>-<来源>.json`：有效 7 天，期内不重问；「没有」也记 7 天。
+"""原始快照 `HiddenShelf/sources/<番号>-<来源>.json`：有效 7 天，期内不重问；「没有」也记 7 天。
 
 思路取自 peach `library_processing.py` 的 `_evidence_path`、`_cached_evidence` 与 `_MissCache`
 （7 天同一个有效期：来源会补录、片子可能后来上架，两边同时到期才不会出现「没有」已经过期、

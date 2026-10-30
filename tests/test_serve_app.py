@@ -128,6 +128,18 @@ def test_busy_and_cancel(tmp_path: Path, tmp_root: Path):
     assert client.get(f"/api/events?run={run_id}").status_code == 404, "旧运行不再保留"
 
 
+def test_dry_run_option_reaches_pipeline(tmp_path: Path, tmp_root: Path):
+    fake = fake_pipeline()
+    client = make_client(tmp_path, fake)
+    response = client.post("/api/run", json={"root": str(tmp_root), "dry_run": True}, headers=HEADERS)
+    assert response.status_code == 202
+    client.manager.wait(timeout=10)
+    assert fake.calls[-1]["dry_run"] is True
+    state = client.get("/api/state").json()
+    assert state["options"]["dry_run"] is True
+    assert state["result"]["dry_run"] is True
+
+
 def test_bad_root_and_bad_json_are_400(tmp_path: Path, tmp_root: Path):
     client = make_client(tmp_path, fake_pipeline())
     response = client.post("/api/run", json={"root": str(tmp_root / "nope")}, headers=HEADERS)

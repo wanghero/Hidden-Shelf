@@ -82,6 +82,7 @@ peach 已经把「认番号 → 多站刮削 → 归位文件 → 浏览」做�
 ```
 
 - 目录名 `.shelf` 在 macOS Finder 默认隐藏，Windows 可见；用户要看可以 `⌘⇧.`。
+- **2026-10-29 用户改为可见目录**：资料目录改名 `HiddenShelf/`（普通可见、纯 ASCII、Windows 合法；`paths.SHELF_DIR`），本节下文的 `.shelf/` 一律读作 `HiddenShelf/`；老盘上的 `.shelf/` 由程序自动改名，两者并存时拒绝运行（计划 6）。
 - 媒体目录旁**不写** NFO、封面、缩略图，与 peach 一致。
 - 归位模板默认 `{studio}/{code}/{code}[-cd{cd}]`，可在 `config.json` 改；模板语法、清洗、长度截断、路径逃逸防护照搬 peach 的 `organize_templates`。厂牌未知但番号已认出时落 `_未知厂牌/<番号>/`。
 - 只做**同一卷内**移动（rename），绝不跨盘拷贝。

@@ -27,7 +27,7 @@ test('encodeMediaPath encodes every segment but keeps slashes', () => {
     '%E5%8E%82%E7%89%8C/ABP-758/ABP-758%20%231%2050%25.mp4');
   assert.equal(core.encodeMediaPath('a?b/c.mp4'), 'a%3Fb/c.mp4');
   assert.equal(core.encodeMediaPath(''), '');
-  assert.equal(core.encodeMediaPath('.shelf/covers/ABP-758.jpg'), '.shelf/covers/ABP-758.jpg');
+  assert.equal(core.encodeMediaPath('HiddenShelf/covers/ABP-758.jpg'), 'HiddenShelf/covers/ABP-758.jpg');
 });
 
 test('searchWorks is case-insensitive, multi-word AND, empty returns all', () => {

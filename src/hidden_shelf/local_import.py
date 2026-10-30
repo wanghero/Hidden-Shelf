@@ -1,7 +1,7 @@
 """把盘里已有的本地资料导入库：NFO、旧封面、`overrides.json`。
 
 本地 NFO 与封面先于联网来源（计划 2）；用户在 `overrides.json` 里写的东西以 `user:manual`
-身份合并，任何自动写入都覆盖不掉。原始文件一律不动，归位时才搬去 `.shelf/legacy/`。
+身份合并，任何自动写入都覆盖不掉。原始文件一律不动，归位时才搬去 `HiddenShelf/legacy/`。
 """
 from __future__ import annotations
 

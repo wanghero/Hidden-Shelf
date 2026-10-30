@@ -1,4 +1,4 @@
-"""目录列举后端（`serve/browse.py`）：只列目录、不越界、隐藏目录与 `.shelf` 的规则、截断、根列表。"""
+"""目录列举后端（`serve/browse.py`）：只列目录、不越界、隐藏目录与资料目录 `HiddenShelf` 的规则、截断、根列表。"""
 from __future__ import annotations
 
 import os
@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from hidden_shelf.paths import SHELF_DIR
 from hidden_shelf.serve.browse import MAX_ENTRIES, BrowseError, Entry, Listing, list_directory, list_roots
 
 
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     disk = tmp_path / "disk"
-    for name in ("Prestige", ".hidden", ".shelf", "@eaDir", "中文 目录#1", "Prestige/.shelf", "$RECYCLE.BIN", "System Volume Information"):
+    for name in ("Prestige", ".hidden", SHELF_DIR, "@eaDir", "中文 目录#1", f"Prestige/{SHELF_DIR}", "$RECYCLE.BIN", "System Volume Information"):
         (disk / name).mkdir(parents=True)
     (disk / "file.txt").write_text("x", encoding="utf-8")
     return disk
@@ -33,9 +34,19 @@ def test_list_directory_only_visible_dirs(tree: Path, tmp_path: Path):
 def test_show_hidden_includes_dot_dirs_but_never_shelf_or_system_dirs(tree: Path):
     names = [e.name for e in list_directory(str(tree), show_hidden=True).entries]
     assert ".hidden" in names
-    for never in (".shelf", "@eaDir", "$RECYCLE.BIN", "System Volume Information"):
+    for never in (SHELF_DIR, "@eaDir", "$RECYCLE.BIN", "System Volume Information"):
         assert never not in names, never
     assert "file.txt" not in names
+
+
+def test_legacy_dot_shelf_counts_as_library_but_stays_hidden(tmp_path: Path):
+    """还没迁移的老盘只有 `.shelf/`：选择器照样标「已有库」，但 `.shelf` 本身永远不列。"""
+    disk = tmp_path / "old"
+    (disk / ".shelf").mkdir(parents=True)
+    (disk / "Prestige").mkdir()
+    listing = list_directory(str(disk), show_hidden=True)
+    assert listing.has_shelf is True
+    assert [e.name for e in listing.entries] == ["Prestige"]
 
 
 def test_symlinked_dirs_are_not_followed(tree: Path, tmp_path: Path):
@@ -57,7 +68,8 @@ def test_root_listing_has_no_parent(tmp_path: Path):
 @pytest.mark.parametrize("raw,status,fragment", [
     ("relative/x", 400, "绝对路径"),
     ("", 400, "绝对路径"),
-    ("/a/../b", 400, ".."),
+    # 带 `..` 的绝对路径要按平台拼：Windows 上 `/a/../b` 没有盘符、不算绝对路径，会先撞「绝对路径」那条。
+    (str(Path(Path.cwd().anchor, "a", "..", "b")), 400, ".."),
 ])
 def test_rejects_bad_paths(raw: str, status: int, fragment: str):
     with pytest.raises(BrowseError) as caught:
@@ -134,7 +146,7 @@ def test_sorted_casefold(tmp_path: Path):
 def test_roots_macos_style(tmp_path: Path):
     volumes = tmp_path / "Volumes"
     (volumes / "zeta").mkdir(parents=True)
-    (volumes / "Alpha" / ".shelf").mkdir(parents=True)
+    (volumes / "Alpha" / SHELF_DIR).mkdir(parents=True)
     (volumes / "file").write_text("x", encoding="utf-8")
     home = tmp_path / "home" / "wanghero"
     home.mkdir(parents=True)
