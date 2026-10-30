@@ -18,7 +18,8 @@ from .. import pipeline
 from ..config import ShelfConfig
 from ..fsutil import atomic_write_text
 from ..netconfig import home as config_home
-from ..paths import RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable
+from ..paths import (RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable,
+                     migrate_legacy_dir)
 from .events import Event, EventProgress, RunLog
 
 RECENT_LIMIT = 10
@@ -170,6 +171,10 @@ class RunManager:
     def _work(self, log: RunLog, options: RunOptions) -> None:
         try:
             paths = ShelfPaths(options.root)
+            # 老盘迁移在读配置之前；顺序不能反，否则读配置之后的建目录会抢先建出 HiddenShelf/。
+            # 这里显式调一次是为了把那句话记进网页日志（ensure() 自己也会调，幂等）。
+            if migrate_legacy_dir(options.root):
+                log.append("step.progress", level="info", message=pipeline.MIGRATED_NOTE)
             paths.ensure()
             config = ShelfConfig.load(paths)
             config.move_unrecognized = options.move_unrecognized

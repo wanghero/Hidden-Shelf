@@ -66,8 +66,9 @@ def test_config_roundtrip_and_defaults(tmp_root: Path):
     assert config.unknown_studio_dir == "_未知厂牌"
     assert config.code_patterns == []
     assert config.language == "zh"
-    # 文件不存在时用默认值并落盘。
-    assert paths.config.is_file()
+    # 文件不存在时只用默认值、不落盘；默认配置由 ensure() 写出。
+    assert not paths.config.exists()
+    paths.ensure()
     stored = json.loads(paths.config.read_text(encoding="utf-8"))
     assert stored["move_unrecognized"] is True
 
@@ -145,3 +146,17 @@ def test_ensure_refuses_both_dirs(tmp_path: Path):
     (tmp_path / "HiddenShelf").rmdir()
     check_layout(tmp_path)
     assert (tmp_path / ".shelf").is_dir()
+
+
+def test_config_load_does_not_create_dir(tmp_path: Path):
+    """读配置不能有副作用：老盘迁移发生在任何会创建 HiddenShelf/ 的动作之前，load 就不能建目录。"""
+    paths = ShelfPaths(tmp_path)
+    assert ShelfConfig.load(paths) == ShelfConfig()
+    assert list(tmp_path.iterdir()) == []
+    paths.ensure()
+    assert paths.config.is_file()
+    assert ShelfConfig.load(paths) == ShelfConfig()
+    # 已有的配置 ensure() 不覆盖。
+    ShelfConfig(move_unrecognized=False).save(paths)
+    paths.ensure()
+    assert ShelfConfig.load(paths).move_unrecognized is False

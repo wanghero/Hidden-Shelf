@@ -1,6 +1,7 @@
 """流水线与命令行端到端。依赖 fake_video（ffmpeg 不在则 skip）。"""
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -8,7 +9,7 @@ import pytest
 from PIL import Image
 
 from hidden_shelf import cli, pipeline
-from hidden_shelf.paths import SHELF_DIR, ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfLayoutConflict, ShelfPaths
 
 
 @pytest.fixture
@@ -183,3 +184,29 @@ def test_run_migrates_legacy_dir_and_logs(tmp_root: Path, fake_video):
     assert result.log_path.is_relative_to(tmp_root / SHELF_DIR)
     text = result.log_path.read_text(encoding="utf-8")
     assert "已把 .shelf/ 改名为 HiddenShelf/" in text and "请重新出站" in text
+
+
+def _legacy_disk(tmp_root: Path) -> Path:
+    """老盘：只有 `.shelf/`，里面带一份非默认配置，迁移时必须原样带过去。"""
+    legacy = tmp_root / ".shelf"
+    legacy.mkdir()
+    (legacy / "config.json").write_text(json.dumps({"move_unrecognized": False}), encoding="utf-8")
+    return tmp_root
+
+
+def test_cli_migrates_legacy_before_loading_config(tmp_root: Path, capsys):
+    _legacy_disk(tmp_root)
+    assert cli.main(["scan", str(tmp_root)]) == 0
+    assert not (tmp_root / ".shelf").exists()
+    assert json.loads((tmp_root / SHELF_DIR / "config.json").read_text(encoding="utf-8"))["move_unrecognized"] is False
+    captured = capsys.readouterr()
+    assert "同时有" not in captured.err
+    # 迁移发生在开跑前，那句提示要让用户在终端看到。
+    assert "已把 .shelf/ 改名为 HiddenShelf/" in captured.out
+
+
+def test_cli_layout_conflict_from_pipeline_exits_2(tmp_root: Path, capsys, monkeypatch):
+    """前置检查没挡住（比如检查和开跑之间有人复制了目录）：pipeline.run 抛出来也要是退出码 2，不是 traceback。"""
+    monkeypatch.setattr(cli.pipeline, "run", lambda *a, **k: (_ for _ in ()).throw(ShelfLayoutConflict(tmp_root)))
+    assert cli.main(["scan", str(tmp_root)]) == 2
+    assert "同时有" in capsys.readouterr().err

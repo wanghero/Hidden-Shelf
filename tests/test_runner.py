@@ -1,12 +1,14 @@
 """运行管理器：后台线程与生命周期事件、单运行、取消、状态归约、异常不吞、选项校验、最近目录。"""
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 
 import pytest
 
 from hidden_shelf import pipeline
+from hidden_shelf.paths import SHELF_DIR
 from hidden_shelf.serve.runner import RunBusy, RunManager, RunOptions, reduce_state
 from serve_fakes import fake_pipeline
 
@@ -161,3 +163,19 @@ def test_options_reject_readonly_root_with_hint(tmp_root: Path, monkeypatch):
     with pytest.raises(ValueError, match="不可写") as caught:
         RunOptions.from_payload({"root": str(tmp_root)})
     assert "NTFS" in str(caught.value)
+
+
+def test_runner_migrates_legacy_before_loading_config(tmp_root: Path, home: Path):
+    """网页老盘首跑：真 pipeline.run，开跑前先迁移，老配置原样带过去，不会因两目录并存而失败。"""
+    legacy = tmp_root / ".shelf"
+    legacy.mkdir()
+    (legacy / "config.json").write_text(json.dumps({"move_unrecognized": False}), encoding="utf-8")
+    manager = RunManager(home=home, run_pipeline=pipeline.run)
+    run_id = manager.start(_options(tmp_root, steps=["scan"], offline=True))
+    assert manager.wait(timeout=30)
+    events = manager.log_for(run_id).events
+    assert events[-1].kind == "run.done" and events[-1].stats["ok"] is True, events[-1].stats
+    assert not (tmp_root / ".shelf").exists()
+    assert json.loads((tmp_root / SHELF_DIR / "config.json").read_text(encoding="utf-8"))["move_unrecognized"] is False
+    # 网页日志里也有那句提示（与命令行同一句）。
+    assert any(e.kind == "step.progress" and "已把 .shelf/ 改名为 HiddenShelf/" in (e.message or "") for e in events)
