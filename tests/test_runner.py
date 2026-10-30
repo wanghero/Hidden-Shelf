@@ -129,6 +129,11 @@ def test_options_from_payload_validation(tmp_root: Path):
         RunOptions.from_payload({"root": str(tmp_root), "offline": "false"})
     with pytest.raises(ValueError, match="JSON 对象"):
         RunOptions.from_payload(["x"])
+    assert RunOptions.from_payload({"root": str(tmp_root)}).dry_run is False
+    dry = RunOptions.from_payload({"root": str(tmp_root), "dry_run": True})
+    assert dry.dry_run is True and dry.to_dict()["dry_run"] is True
+    with pytest.raises(ValueError, match="dry_run"):
+        RunOptions.from_payload({"root": str(tmp_root), "dry_run": "yes"})
 
 
 def test_recent_roots_roundtrip(home: Path, tmp_path: Path):

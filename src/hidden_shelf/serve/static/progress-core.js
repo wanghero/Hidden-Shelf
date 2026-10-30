@@ -114,7 +114,8 @@
   function summaryOf(step, stats, t) {
     if (!stats || typeof stats !== 'object') return '';
     if (stats.skipped === true) return String(stats.reason || '');
-    var key = 'summary.' + step;
+    // 预演的归位 stats 是 preview_organize 的返回（move/unchanged/skip），用自己的模板。
+    var key = 'summary.' + step + (stats.dry_run === true ? '.dry_run' : '');
     var template = t(key, {});
     if (!template || template === key) return '';
     var vars = {};

@@ -11,12 +11,13 @@ def fake_pipeline(*, fail=(), skip=(), gate: threading.Event | None = None, chec
     """假流水线：按步调用 progress 回调；`gate` 阻塞在第一步后；`check_cancel` 每步后查取消。"""
     calls = []
 
-    def run(root, *, config=None, steps=pipeline.STEPS, progress=None, scrape_options=None, cancel=None):
+    def run(root, *, config=None, steps=pipeline.STEPS, progress=None, scrape_options=None, cancel=None,
+            dry_run=False):
         calls.append({"root": root, "steps": tuple(steps), "move": config.move_unrecognized if config else None,
-                      "offline": scrape_options.offline if scrape_options else None})
+                      "offline": scrape_options.offline if scrape_options else None, "dry_run": dry_run})
         if raise_error:
             raise raise_error
-        result = pipeline.RunResult(log_path=Path(root) / ".shelf" / "logs" / "x.log")
+        result = pipeline.RunResult(log_path=Path(root) / ".shelf" / "logs" / "x.log", dry_run=dry_run)
         for index, name in enumerate(steps):
             if check_cancel and cancel is not None and cancel():
                 result.cancelled = True

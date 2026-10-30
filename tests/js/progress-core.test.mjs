@@ -108,6 +108,8 @@ test('summaryOf fills the per-step template and tolerates odd stats', () => {
   assert.ok(scan.includes('3') && scan.includes('1') && scan.includes('未识别 0'), scan);
   assert.equal(core.summaryOf('scrape', { asked: 2, settled: 1, covers: 1, avatars: 0, paused: ['javdb'] }, t), '问了 2 次，落库 1，封面 1，头像 0');
   assert.equal(core.summaryOf('organize', { moved: 4 }, t), '移动 4，跳过 0', '缺的键补 0');
+  assert.equal(core.summaryOf('organize', { dry_run: true, move: 3, unchanged: 1, skip: 0, reasons: {}, plan_file: 'logs/plan-x.txt' }, t),
+    '预演：要搬 3，已就位 1，跳过 0', '预演用自己的模板');
   assert.equal(core.summaryOf('scrape', { skipped: true, reason: '--offline' }, t), '--offline');
   assert.equal(core.summaryOf('bogus', { x: 1 }, t), '');
   assert.equal(core.summaryOf('scan', null, t), '');

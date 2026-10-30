@@ -97,7 +97,12 @@
     'browse.error.generic': '读不了这个目录：{error}',
     'browse.readonly': '此目录不可写，选了也跑不了',
     'toast.failed.setup': '运行没能开始',
-    'result.failed.setup': '流水线没能开始：{error}'
+    'result.failed.setup': '流水线没能开始：{error}',
+    'summary.organize.dry_run': '预演：要搬 {move}，已就位 {unchanged}，跳过 {skip}',
+    'form.dry_run': '只预演：列出要搬的文件，不动盘（仍会写 .shelf/）',
+    'result.dry_run': '预演完成，没有动任何文件；清单在 .shelf/logs/ 下',
+    'toast.dry_run': '预演完成',
+    'page.dry_run': '上次预演完成'
   };
   var en = {
     'app.name': 'Hidden Shelf',
@@ -193,7 +198,12 @@
     'browse.error.generic': 'Cannot read this folder: {error}',
     'browse.readonly': 'This folder is not writable; a run here would fail',
     'toast.failed.setup': 'The run could not start',
-    'result.failed.setup': 'The pipeline could not start: {error}'
+    'result.failed.setup': 'The pipeline could not start: {error}',
+    'summary.organize.dry_run': 'Preview: {move} to move, {unchanged} in place, {skip} skipped',
+    'form.dry_run': 'Preview only: list the moves, touch nothing (still writes .shelf/)',
+    'result.dry_run': 'Preview finished, nothing was moved; the list is under .shelf/logs/',
+    'toast.dry_run': 'Preview finished',
+    'page.dry_run': 'Last preview finished'
   };
   return { zh: zh, en: en };
 });
