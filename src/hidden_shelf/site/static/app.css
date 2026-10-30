@@ -341,3 +341,8 @@
   .input { font-size: 16px; }
   .related-row { grid-auto-columns: 150px; }
 }
+
+/* 语言按钮 CH / EN / JP：当前语言高亮 */
+.lang-opt { color: var(--fg-muted); }
+.lang-opt.on { color: var(--primary); font-weight: var(--weight-semibold); }
+.lang-sep { color: var(--fg-muted); }

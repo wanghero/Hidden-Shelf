@@ -14,18 +14,31 @@
   /* ---------- 偏好 ---------- */
   function readPref(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
   function writePref(key, value) { try { if (value == null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) { /* 私密模式 */ } }
+  var LANGS = ['zh', 'en', 'ja'];
+  var LANG_TAGS = { zh: 'zh-CN', en: 'en', ja: 'ja' };
+  var LANG_SHORT = { zh: 'CH', en: 'EN', ja: 'JP' };
   var lang = (function () {
     var saved = readPref('lang');
-    if (saved === 'zh' || saved === 'en') return saved;
-    return /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+    if (LANGS.indexOf(saved) !== -1) return saved;
+    var nav = navigator.language || '';
+    return /^zh/i.test(nav) ? 'zh' : /^ja/i.test(nav) ? 'ja' : 'en';
   })();
+  function nextLang() { return LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length]; }
+  function langSwitch() {
+    var parts = [];
+    LANGS.forEach(function (code, i) {
+      if (i) parts.push(h('span', { class: 'lang-sep', 'aria-hidden': 'true', text: ' / ' }));
+      parts.push(h('span', { class: 'lang-opt' + (code === lang ? ' on' : ''), text: LANG_SHORT[code] }));
+    });
+    return parts;
+  }
   function t(key, vars) {
     var table = dict[lang] || {};
     var text = table[key] != null ? table[key] : (dict.zh && dict.zh[key] != null ? dict.zh[key] : key);
     if (vars) Object.keys(vars).forEach(function (name) { text = text.split('{' + name + '}').join(String(vars[name])); });
     return text;
   }
-  function applyLang() { document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'; document.title = t('app.name') + ' · ' + t('page.title'); }
+  function applyLang() { document.documentElement.lang = LANG_TAGS[lang] || 'en'; document.title = t('app.name') + ' · ' + t('page.title'); }
   function themePref() { var saved = readPref('theme'); return saved === 'light' || saved === 'dark' ? saved : 'system'; }
   function applyTheme(value) {
     if (value === 'light' || value === 'dark') { document.documentElement.dataset.theme = value; writePref('theme', value); }
@@ -471,7 +484,7 @@
               icon(value === 'light' ? 'sun' : value === 'dark' ? 'moon' : 'monitor'), h('span', { text: t('theme.' + value) }), theme === value ? icon('check') : null);
           })) : null),
         h('button', { class: 'footer-button', 'data-ripple': true, 'aria-label': t('lang.label'),
-          onclick: function () { lang = lang === 'zh' ? 'en' : 'zh'; writePref('lang', lang); applyLang(); buildShell(); update(); } }, h('span', { text: t('lang.toggle') })),
+          onclick: function () { lang = nextLang(); writePref('lang', lang); applyLang(); buildShell(); update(); } }, langSwitch()),
         h('div', { class: 'version', text: t('version') + ' ' + (boot.version || document.body.getAttribute('data-version') || '') })));
   }
 

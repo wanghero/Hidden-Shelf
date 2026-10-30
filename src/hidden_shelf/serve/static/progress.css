@@ -262,3 +262,8 @@
   .log-line .ts, .log-line .st { display: none; }
   .toasts { right: var(--space-4); left: var(--space-4); bottom: auto; top: var(--space-4); max-width: none; }
 }
+
+/* 语言按钮 CH / EN / JP：当前语言高亮 */
+.lang-opt { color: var(--fg-muted); }
+.lang-opt.on { color: var(--primary); font-weight: var(--weight-semibold); }
+.lang-sep { color: var(--fg-muted); }

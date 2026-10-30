@@ -206,9 +206,12 @@ def test_i18n_dictionaries_have_same_keys():
     import re
     from hidden_shelf.serve.app import STATIC_DIR
     text = (STATIC_DIR / "i18n.js").read_text(encoding="utf-8")
-    zh = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[0], re.M))
-    en = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[1], re.M))
-    assert zh == en and len(zh) > 50
+    zh_text, rest = text.split("var en = {")
+    en_text, ja_text = rest.split("var ja = {")
+    zh = set(re.findall(r"^\s+'([\w.]+)':", zh_text, re.M))
+    en = set(re.findall(r"^\s+'([\w.]+)':", en_text, re.M))
+    ja = set(re.findall(r"^\s+'([\w.]+)':", ja_text, re.M))
+    assert zh == en == ja and len(zh) > 50
 
 
 def test_progress_css_uses_only_tokens():

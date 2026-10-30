@@ -20,7 +20,7 @@ class ShelfConfig:
     unknown_studio_dir: str = "_未知厂牌"
     #: 用户自定义番号识别正则，先于内置规则试。
     code_patterns: list[str] = field(default_factory=list)
-    #: 站点默认语言：`zh` | `en`。
+    #: 站点默认语言：`zh` | `en` | `ja`（用户 2026-10-30 定：CH / EN / JP 三选）。
     language: str = "zh"
     #: 是否联网刮削（计划 2）。关掉就只走本地流水线。
     scrape: bool = True

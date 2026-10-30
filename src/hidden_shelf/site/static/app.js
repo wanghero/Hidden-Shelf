@@ -16,13 +16,27 @@
     try { if (value == null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) { /* 私密模式 */ }
   }
 
+  var LANGS = ['zh', 'en', 'ja'];
+  var LANG_TAGS = { zh: 'zh-CN', en: 'en', ja: 'ja' };
+  var LANG_SHORT = { zh: 'CH', en: 'EN', ja: 'JP' };
   var lang = (function () {
     var saved = readPref('lang');
-    if (saved === 'zh' || saved === 'en') return saved;
+    if (LANGS.indexOf(saved) !== -1) return saved;
     var fromBody = document.body && document.body.getAttribute('data-language');
-    if (fromBody === 'zh' || fromBody === 'en') return fromBody;
-    return /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+    if (LANGS.indexOf(fromBody) !== -1) return fromBody;
+    var nav = navigator.language || '';
+    return /^zh/i.test(nav) ? 'zh' : /^ja/i.test(nav) ? 'ja' : 'en';
   })();
+  function nextLang() { return LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length]; }
+  /** 语言按钮：CH / EN / JP 三段，当前那段高亮；点一下切到下一种。 */
+  function langSwitch() {
+    var parts = [];
+    LANGS.forEach(function (code, i) {
+      if (i) parts.push(h('span', { class: 'lang-sep', 'aria-hidden': 'true', text: ' / ' }));
+      parts.push(h('span', { class: 'lang-opt' + (code === lang ? ' on' : ''), text: LANG_SHORT[code] }));
+    });
+    return parts;
+  }
 
   function t(key, vars) {
     var table = dict[lang] || {};
@@ -34,7 +48,7 @@
   }
 
   function applyLang() {
-    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    document.documentElement.lang = LANG_TAGS[lang] || 'en';
     document.title = t('app.name');
     localizeData();
   }
@@ -202,7 +216,7 @@
               theme === value ? icon('check') : null);
           })) : null),
         h('button', { class: 'footer-button', 'data-ripple': true, 'aria-label': t('lang.label'),
-          onclick: function () { lang = lang === 'zh' ? 'en' : 'zh'; writePref('lang', lang); applyLang(); render(); } }, h('span', { text: t('lang.toggle') })),
+          onclick: function () { lang = nextLang(); writePref('lang', lang); applyLang(); render(); } }, langSwitch()),
         h('div', { class: 'version', text: t('version') + ' ' + (meta.version || document.body.getAttribute('data-version') || '') })));
   }
 

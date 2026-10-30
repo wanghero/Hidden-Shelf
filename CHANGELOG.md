@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 1.4.2 - 2026-10-30
+
+### 新增
+
+- 站点与进度网页都加了日文：语言按钮从「中 / EN」变成 **CH / EN / JP** 三段（当前语言高亮，点一下切到下一种）；`config.json` 的 `language` 与 `--language` 可填 `ja`，`<html lang>` 相应为 `ja`。浏览器语言是日文时默认日文。
+
 ## 1.4.1 - 2026-10-30
 
 ### 新增

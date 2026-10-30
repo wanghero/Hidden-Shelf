@@ -194,9 +194,20 @@ def test_english_language_sets_lang(disk):
 
 def test_i18n_dictionaries_have_same_keys():
     text = (build_module.STATIC_DIR / "i18n.js").read_text(encoding="utf-8")
-    zh = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[0], re.M))
-    en = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[1], re.M))
-    assert zh == en and zh
+    zh_text, rest = text.split("var en = {")
+    en_text, ja_text = rest.split("var ja = {")
+    zh = set(re.findall(r"^\s+'([\w.]+)':", zh_text, re.M))
+    en = set(re.findall(r"^\s+'([\w.]+)':", en_text, re.M))
+    ja = set(re.findall(r"^\s+'([\w.]+)':", ja_text, re.M))
+    assert zh == en == ja and zh
+    assert "return { zh: zh, en: en, ja: ja }" in text
+
+
+def test_japanese_language_sets_lang(disk):
+    root, paths, connection = disk
+    build_site(connection, paths, ShelfConfig(language="ja"))
+    html = paths.index_html.read_text(encoding="utf-8")
+    assert '<html lang="ja">' in html and 'data-language="ja"' in html
 
 
 def test_site_paths_use_forward_slashes(disk):
