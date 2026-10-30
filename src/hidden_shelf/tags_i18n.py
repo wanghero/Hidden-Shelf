@@ -158,6 +158,18 @@ TAG_NAMES: tuple[tuple[str, ...], ...] = (
     ("ホラー", "恐怖", "Horror"),
     ("アクション", "动作", "Action", "動作"),
     ("その他", "其他", "Other", "其它"),
+    # 无码站（Tokyo-Hot、カリビアンコム 等经 javbus）常见的几个
+    ("生ハメ", "无套", "Raw sex", "無套", "生插"),
+    ("ハード系", "硬派", "Hardcore", "重口"),
+    ("モデル系", "模特系", "Model type", "模特兒系"),
+    ("AV女優", "AV女优", "AV actress", "AV女优", "女優"),
+    ("美人", "美人", "Beauty", "美女"),
+    ("美ボディ", "美体", "Beautiful body", "美體"),
+    ("痴漢", "痴汉", "Molester", "痴漢"),
+    ("即ハメ", "即插", "Instant sex", "即插入"),
+    ("ぶっかけ", "颜射大赛", "Bukkake", "多人颜射"),
+    ("フィスト", "拳交", "Fisting", "拳交"),
+    ("二穴", "双穴", "Double penetration", "雙穴"),
 )
 
 _INDEX: dict[str, tuple[str, str, str]] = {}
