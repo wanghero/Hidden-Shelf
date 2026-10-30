@@ -154,6 +154,7 @@
       disconnect();
       if (event.kind === 'run.cancelled') toast('info', t('toast.cancelled'));
       else if (state.result && state.result.ok) toast('success', t('toast.done'));
+      else if (state.result && !state.result.failed_step) toast('danger', t('toast.failed.setup'), true);
       else toast('danger', t('toast.failed', { step: stepLabel(state.result && state.result.failed_step) }), true);
     }
     void wasRunning;
@@ -410,7 +411,10 @@
       list.appendChild(fragment);
       p.listWrap.appendChild(list);
     }
-    p.note.textContent = picker.listing && picker.listing.truncated ? t('browse.truncated', { n: picker.listing.entries.length }) : '';
+    var notes = [];
+    if (picker.listing && picker.listing.truncated) notes.push(t('browse.truncated', { n: picker.listing.entries.length }));
+    if (picker.listing && picker.listing.writable === false) notes.push(t('browse.readonly'));
+    p.note.textContent = notes.join(' · ');
     p.up.disabled = picker.loading || !parentOfCurrent();
     updatePickerButtons();
   }
@@ -610,7 +614,9 @@
     refs.resultBox.hidden = state.running || !state.result;
     if (!refs.resultBox.hidden) {
       var result = state.result;
-      var text = result.cancelled ? t('result.cancelled') : result.ok ? t('result.ok') : t('result.failed', { step: stepLabel(result.failed_step), error: result.error || '' });
+      // 没有 failed_step 的失败发生在第一步之前（建 .shelf、开库），比如盘是只读的。
+      var text = result.cancelled ? t('result.cancelled') : result.ok ? t('result.ok')
+        : result.failed_step ? t('result.failed', { step: stepLabel(result.failed_step), error: result.error || '' }) : t('result.failed.setup', { error: result.error || '' });
       refs.resultBox.appendChild(h('h3', { class: 'card-title', text: t('result.title') }));
       refs.resultBox.appendChild(h('p', { class: 'result-text' + (result.ok ? '' : ' failed'), text: text }));
       if (result.log_path) refs.resultBox.appendChild(h('div', { class: 'result-path', text: t('result.log', { path: result.log_path }) }));

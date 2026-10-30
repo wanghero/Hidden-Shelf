@@ -103,3 +103,25 @@ def test_cli_version(capsys):
         cli.main(["--version"])
     assert caught.value.code == 0
     assert "shelf 0." in capsys.readouterr().out
+
+
+def test_cli_readonly_root_exit_2_with_hint(tmp_path: Path, capsys, monkeypatch):
+    """盘不可写（macOS 只读挂载的 NTFS 盘最常见）：开跑之前就说清楚，不让它跑到建 .shelf 时才炸。"""
+    import os
+    monkeypatch.setattr(os, "access", lambda path, mode, **kw: not (mode & os.W_OK))
+    assert cli.main(["run", str(tmp_path)]) == 2
+    err = capsys.readouterr().err
+    assert "不可写" in err and "NTFS" in err and ".shelf" in err and str(tmp_path) in err
+
+
+def test_paths_ensure_turns_erofs_into_root_not_writable(tmp_path: Path, monkeypatch):
+    import errno
+    from hidden_shelf.paths import RootNotWritable
+
+    def refuse(self, *args, **kwargs):
+        raise OSError(errno.EROFS, "Read-only file system", str(self))
+    monkeypatch.setattr(Path, "mkdir", refuse)
+    with pytest.raises(RootNotWritable) as caught:
+        ShelfPaths(tmp_path).ensure()
+    assert "不可写" in str(caught.value) and "只读" in str(caught.value) and str(tmp_path) in str(caught.value)
+    assert caught.value.errno == errno.EROFS

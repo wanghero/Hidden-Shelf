@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import __version__, pipeline
 from .config import ShelfConfig
-from .paths import ShelfPaths
+from .paths import RootNotWritable, ShelfPaths, check_writable
 
 COMMANDS = {
     "run": ("全流程：扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站", pipeline.STEPS),
@@ -119,6 +119,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"盘根目录不存在或不是目录：{root}", file=sys.stderr)
         return 2
     root = root.resolve()
+    try:
+        check_writable(root)
+    except RootNotWritable as error:
+        print(str(error), file=sys.stderr)
+        return 2
     paths = ShelfPaths(root)
     config = ShelfConfig.load(paths)
     if args.no_move_unrecognized:

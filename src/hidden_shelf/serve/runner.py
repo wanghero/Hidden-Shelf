@@ -18,7 +18,7 @@ from .. import pipeline
 from ..config import ShelfConfig
 from ..fsutil import atomic_write_text
 from ..netconfig import home as config_home
-from ..paths import ShelfPaths
+from ..paths import RootNotWritable, ShelfPaths, check_writable
 from .events import Event, EventProgress, RunLog
 
 RECENT_LIMIT = 10
@@ -48,6 +48,10 @@ class RunOptions:
         root = Path(raw_root).expanduser()
         if not root.is_dir():
             raise ValueError(f"盘根目录不存在或不是目录：{raw_root}")
+        try:
+            check_writable(root)
+        except RootNotWritable as error:
+            raise ValueError(str(error)) from None
         flags = {}
         for key, default in (("move_unrecognized", True), ("offline", False), ("force_scrape", False)):
             value = data.get(key, default)

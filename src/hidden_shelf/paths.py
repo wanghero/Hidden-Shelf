@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import errno
+import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -81,11 +83,17 @@ class ShelfPaths:
         return self.root / "index.html"
 
     def ensure(self) -> None:
-        """建全部 `.shelf/` 下的目录。`未识别/` 由归位按需建。"""
+        """建全部 `.shelf/` 下的目录。`未识别/` 由归位按需建。盘不可写抛 `RootNotWritable`（带怎么办）。"""
         for directory in (self.shelf, self.site, self.site_data, self.covers, self.posters,
                           self.sheets, self.avatars, self.sources, self.legacy, self.logs,
                           self.backups):
-            directory.mkdir(parents=True, exist_ok=True)
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                if error.errno in _NOT_WRITABLE_ERRNOS:
+                    raise RootNotWritable(self.root, error.errno) from error
+                raise
+
 
     def relative(self, path: Path) -> str:
         """`path` 相对盘根目录的 POSIX 串；不在盘根下抛 `ValueError`。"""
@@ -116,3 +124,30 @@ class ShelfPaths:
         if pure.is_absolute() or ".." in pure.parts or not str(rel):
             raise ValueError(f"不是 .shelf 下的相对路径：{rel!r}")
         return self.shelf.joinpath(*pure.parts)
+
+
+#: 建目录时这些错误码都意味着「这块盘写不了」，不是程序的问题。
+_NOT_WRITABLE_ERRNOS = frozenset({errno.EROFS, errno.EACCES, errno.EPERM})
+
+
+class RootNotWritable(OSError):
+    """盘根目录写不了。`errno` 是原因（`EROFS` 只读文件系统、`EACCES`/`EPERM` 没权限），`str()` 是给用户看的话。"""
+
+    def __init__(self, root: Path, code: int = errno.EROFS) -> None:
+        super().__init__(code, writability_hint(root, code), str(root))
+
+    def __str__(self) -> str:
+        return str(self.strerror)
+
+
+def writability_hint(root: Path, code: int = errno.EROFS) -> str:
+    cause = "这块盘是只读文件系统" if code == errno.EROFS else "当前用户对这块盘没有写权限"
+    return (f"盘根目录不可写：{root}。{cause}。藏片阁要在盘根目录写 .shelf/ 和 index.html，所以跑不了。"
+            "最常见的原因是 macOS 默认把 NTFS 格式的盘只读挂载：装 NTFS 驱动（Paragon、Tuxera 等），"
+            "或把盘改成 exFAT/APFS；也检查一下盘的写保护开关和「显示简介 → 共享与权限」。")
+
+
+def check_writable(root: Path) -> None:
+    """开跑之前先问一句能不能写，不动盘上任何东西；写不了抛 `RootNotWritable`。"""
+    if not os.access(root, os.W_OK):
+        raise RootNotWritable(root, errno.EROFS)

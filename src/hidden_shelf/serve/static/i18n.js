@@ -94,7 +94,10 @@
     'browse.running': '运行中不能更换',
     'browse.error.403': '没有读取权限',
     'browse.error.404': '目录不存在',
-    'browse.error.generic': '读不了这个目录：{error}'
+    'browse.error.generic': '读不了这个目录：{error}',
+    'browse.readonly': '此目录不可写，选了也跑不了',
+    'toast.failed.setup': '运行没能开始',
+    'result.failed.setup': '流水线没能开始：{error}'
   };
   var en = {
     'app.name': 'Hidden Shelf',
@@ -187,7 +190,10 @@
     'browse.running': 'Cannot change while a run is in progress',
     'browse.error.403': 'No permission to read this folder',
     'browse.error.404': 'Folder does not exist',
-    'browse.error.generic': 'Cannot read this folder: {error}'
+    'browse.error.generic': 'Cannot read this folder: {error}',
+    'browse.readonly': 'This folder is not writable; a run here would fail',
+    'toast.failed.setup': 'The run could not start',
+    'result.failed.setup': 'The pipeline could not start: {error}'
   };
   return { zh: zh, en: en };
 });

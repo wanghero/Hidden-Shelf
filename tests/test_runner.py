@@ -144,3 +144,11 @@ def test_recent_roots_roundtrip(home: Path, tmp_path: Path):
     manager.recent_path.write_text("not json", encoding="utf-8")
     assert manager.recent_roots() == []
     assert manager.recent_path.parent == home
+
+
+def test_options_reject_readonly_root_with_hint(tmp_root: Path, monkeypatch):
+    import os
+    monkeypatch.setattr(os, "access", lambda path, mode, **kw: not (mode & os.W_OK))
+    with pytest.raises(ValueError, match="不可写") as caught:
+        RunOptions.from_payload({"root": str(tmp_root)})
+    assert "NTFS" in str(caught.value)
