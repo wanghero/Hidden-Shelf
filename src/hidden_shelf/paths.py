@@ -1,6 +1,6 @@
-"""盘上的目录布局：盘根目录 → `.shelf/` 下各目录（设计文档 §4.2）。
+"""盘上的目录布局：盘根目录 → `HiddenShelf/` 下各目录（设计文档 §4.2）。
 
-全部派生产物都在 `<盘根>/.shelf/` 下，媒体目录旁不写任何附属文件。库里的 `asset.path`
+全部派生产物都在 `<盘根>/HiddenShelf/` 下，媒体目录旁不写任何附属文件。库里的 `asset.path`
 是相对盘根目录的 POSIX 串，`relative()` / `absolute()` 负责两头转换并拦住越界。
 """
 from __future__ import annotations
@@ -10,6 +10,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+#: 资料目录名（用户 2026-10-29 定：普通可见目录，不藏在点开头的隐藏文件夹里，要考虑 Windows）。
+#: 纯 ASCII、不以点或下划线开头、不是 Windows 保留名、不含尾随点或空格，exFAT/NTFS/APFS 都合法；
+#: 大小写不敏感的文件系统上 `hiddenshelf/` 视作同一目录。全仓库只在这里写死，别处一律引用它。
+SHELF_DIR = "HiddenShelf"
 #: 认不出番号的视频集中搬到这个目录（设置开关可关）。
 UNRECOGNIZED_DIR = "未识别"
 
@@ -20,7 +24,7 @@ class ShelfPaths:
 
     @property
     def shelf(self) -> Path:
-        return self.root / ".shelf"
+        return self.root / SHELF_DIR
 
     @property
     def db(self) -> Path:
@@ -83,7 +87,7 @@ class ShelfPaths:
         return self.root / "index.html"
 
     def ensure(self) -> None:
-        """建全部 `.shelf/` 下的目录。`未识别/` 由归位按需建。盘不可写抛 `RootNotWritable`（带怎么办）。"""
+        """建全部 `HiddenShelf/` 下的目录。`未识别/` 由归位按需建。盘不可写抛 `RootNotWritable`（带怎么办）。"""
         for directory in (self.shelf, self.site, self.site_data, self.covers, self.posters,
                           self.sheets, self.avatars, self.sources, self.legacy, self.logs,
                           self.backups):
@@ -104,11 +108,11 @@ class ShelfPaths:
         return rel.as_posix()
 
     def shelf_relative(self, path: Path) -> str:
-        """`path` 相对 `.shelf/` 的 POSIX 串（库里 `cover_file` 等列用这种写法）。"""
+        """`path` 相对资料目录 `HiddenShelf/` 的 POSIX 串（库里 `cover_file` 等列用这种写法）。"""
         try:
             rel = Path(path).relative_to(self.shelf)
         except ValueError:
-            raise ValueError(f"路径不在 .shelf 下：{path}") from None
+            raise ValueError(f"路径不在 {SHELF_DIR} 下：{path}") from None
         return rel.as_posix()
 
     def absolute(self, rel: str) -> Path:
@@ -119,10 +123,10 @@ class ShelfPaths:
         return self.root.joinpath(*pure.parts)
 
     def shelf_absolute(self, rel: str) -> Path:
-        """`.shelf/` 下相对路径还原成绝对路径。"""
+        """资料目录下的相对路径还原成绝对路径。"""
         pure = PurePosixPath(rel)
         if pure.is_absolute() or ".." in pure.parts or not str(rel):
-            raise ValueError(f"不是 .shelf 下的相对路径：{rel!r}")
+            raise ValueError(f"不是 {SHELF_DIR} 下的相对路径：{rel!r}")
         return self.shelf.joinpath(*pure.parts)
 
 
@@ -142,7 +146,7 @@ class RootNotWritable(OSError):
 
 def writability_hint(root: Path, code: int = errno.EROFS) -> str:
     cause = "这块盘是只读文件系统" if code == errno.EROFS else "当前用户对这块盘没有写权限"
-    return (f"盘根目录不可写：{root}。{cause}。藏片阁要在盘根目录写 .shelf/ 和 index.html，所以跑不了。"
+    return (f"盘根目录不可写：{root}。{cause}。藏片阁要在盘根目录写 {SHELF_DIR}/ 和 index.html，所以跑不了。"
             "最常见的原因是 macOS 默认把 NTFS 格式的盘只读挂载：装 NTFS 驱动（Paragon、Tuxera 等），"
             "或把盘改成 exFAT/APFS；也检查一下盘的写保护开关和「显示简介 → 共享与权限」。")
 

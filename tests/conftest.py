@@ -24,7 +24,7 @@ def isolated_home(tmp_path_factory, monkeypatch):
 
 @pytest.fixture
 def tmp_root(tmp_path: Path) -> Path:
-    """一个空的盘根目录（不预建 .shelf，由被测代码负责）。"""
+    """一个空的盘根目录（不预建 HiddenShelf，由被测代码负责）。"""
     root = tmp_path / "disk"
     root.mkdir()
     return root

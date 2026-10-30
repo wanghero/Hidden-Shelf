@@ -1,4 +1,4 @@
-"""目录列举后端（`serve/browse.py`）：只列目录、不越界、隐藏目录与 `.shelf` 的规则、截断、根列表。"""
+"""目录列举后端（`serve/browse.py`）：只列目录、不越界、隐藏目录与资料目录 `HiddenShelf` 的规则、截断、根列表。"""
 from __future__ import annotations
 
 import os
@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from hidden_shelf.paths import SHELF_DIR
 from hidden_shelf.serve.browse import MAX_ENTRIES, BrowseError, Entry, Listing, list_directory, list_roots
 
 
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     disk = tmp_path / "disk"
-    for name in ("Prestige", ".hidden", ".shelf", "@eaDir", "中文 目录#1", "Prestige/.shelf", "$RECYCLE.BIN", "System Volume Information"):
+    for name in ("Prestige", ".hidden", SHELF_DIR, "@eaDir", "中文 目录#1", f"Prestige/{SHELF_DIR}", "$RECYCLE.BIN", "System Volume Information"):
         (disk / name).mkdir(parents=True)
     (disk / "file.txt").write_text("x", encoding="utf-8")
     return disk
@@ -33,7 +34,7 @@ def test_list_directory_only_visible_dirs(tree: Path, tmp_path: Path):
 def test_show_hidden_includes_dot_dirs_but_never_shelf_or_system_dirs(tree: Path):
     names = [e.name for e in list_directory(str(tree), show_hidden=True).entries]
     assert ".hidden" in names
-    for never in (".shelf", "@eaDir", "$RECYCLE.BIN", "System Volume Information"):
+    for never in (SHELF_DIR, "@eaDir", "$RECYCLE.BIN", "System Volume Information"):
         assert never not in names, never
     assert "file.txt" not in names
 
@@ -134,7 +135,7 @@ def test_sorted_casefold(tmp_path: Path):
 def test_roots_macos_style(tmp_path: Path):
     volumes = tmp_path / "Volumes"
     (volumes / "zeta").mkdir(parents=True)
-    (volumes / "Alpha" / ".shelf").mkdir(parents=True)
+    (volumes / "Alpha" / SHELF_DIR).mkdir(parents=True)
     (volumes / "file").write_text("x", encoding="utf-8")
     home = tmp_path / "home" / "wanghero"
     home.mkdir(parents=True)

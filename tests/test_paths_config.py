@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from hidden_shelf.config import ShelfConfig
-from hidden_shelf.paths import ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 
 
 def test_paths_layout(tmp_root: Path):
     paths = ShelfPaths(tmp_root)
-    shelf = tmp_root / ".shelf"
+    shelf = tmp_root / SHELF_DIR
     assert paths.shelf == shelf
     assert paths.db == shelf / "shelf.db"
     assert paths.config == shelf / "config.json"
@@ -42,8 +42,8 @@ def test_relative_and_absolute_roundtrip(tmp_root: Path):
     rel = paths.relative(tmp_root / "厂牌" / "ABP-758" / "ABP-758 #1.mp4")
     assert rel == "厂牌/ABP-758/ABP-758 #1.mp4"
     assert paths.absolute(rel) == tmp_root / "厂牌" / "ABP-758" / "ABP-758 #1.mp4"
-    assert paths.relative(tmp_root / ".shelf" / "covers" / "x.jpg") == ".shelf/covers/x.jpg"
-    assert paths.shelf_relative(tmp_root / ".shelf" / "covers" / "x.jpg") == "covers/x.jpg"
+    assert paths.relative(tmp_root / SHELF_DIR / "covers" / "x.jpg") == f"{SHELF_DIR}/covers/x.jpg"
+    assert paths.shelf_relative(tmp_root / SHELF_DIR / "covers" / "x.jpg") == "covers/x.jpg"
 
 
 def test_relative_rejects_outside(tmp_root: Path):
@@ -98,3 +98,11 @@ def test_config_bad_json_falls_back_to_defaults(tmp_root: Path):
     assert config == ShelfConfig()
     # 坏文件不覆盖：用户可能还要看它写了什么。
     assert paths.config.read_text(encoding="utf-8") == "{not json"
+
+
+def test_shelf_dir_is_visible_ascii(tmp_path: Path):
+    """资料目录是普通可见目录（用户 2026-10-29 定）：纯 ASCII、不以点或下划线开头、Windows 合法。"""
+    assert SHELF_DIR == "HiddenShelf"
+    assert not SHELF_DIR.startswith((".", "_")) and SHELF_DIR.isascii()
+    assert SHELF_DIR.upper() not in {"CON", "PRN", "AUX", "NUL"} and not SHELF_DIR.endswith((".", " "))
+    assert ShelfPaths(tmp_path).shelf == tmp_path / "HiddenShelf"

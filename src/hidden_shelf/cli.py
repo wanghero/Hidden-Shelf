@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import __version__, pipeline
 from .config import ShelfConfig
-from .paths import RootNotWritable, ShelfPaths, check_writable
+from .paths import SHELF_DIR, RootNotWritable, ShelfPaths, check_writable
 
 COMMANDS = {
     "run": ("全流程：扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站", pipeline.STEPS),
@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--language", choices=("zh", "en"), help="站点默认语言")
         sub.add_argument("--offline", action="store_true", help="本次跳过联网刮削")
         sub.add_argument("--dry-run", action="store_true",
-                         help="只预演：列出要搬的文件与原因，不动盘上任何文件（仍会写 .shelf/）")
+                         help=f"只预演：列出要搬的文件与原因，不动盘上任何文件（仍会写 {SHELF_DIR}/）")
         sub.add_argument("--force-scrape", action="store_true", help="忽略 7 天与「资料已齐」，全部重问")
         sub.add_argument("--sources", help="本次只问这几家，逗号分隔，如 r18dev,javdb")
         sub.add_argument("--routes", help="整条覆盖来源链，如 \"censored=r18dev,javdb;fc2=fc2\"")

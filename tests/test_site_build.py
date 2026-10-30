@@ -10,7 +10,7 @@ import pytest
 from hidden_shelf import db
 from hidden_shelf.config import ShelfConfig
 from hidden_shelf.local_import import import_local
-from hidden_shelf.paths import ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 from hidden_shelf.scan import scan
 from hidden_shelf.site import build as build_module
 from hidden_shelf.site.build import build_site, read_data_js, to_js
@@ -86,7 +86,7 @@ def test_build_writes_files(disk):
     html = (root / "index.html").read_text(encoding="utf-8")
     assert "<title>藏片阁</title>" in html
     assert "<noscript>" in html
-    assert 'href=".shelf/site/tokens.css"' in html
+    assert f'href="{SHELF_DIR}/site/tokens.css"' in html
     assert "http://" not in html and "https://" not in html
     assert 'lang="zh-CN"' in html
 
@@ -104,8 +104,8 @@ def test_works_group_parts(disk):
     abp = works["ABP-758"]
     assert abp["title"] == "标题" and abp["studio"] == "Prestige" and abp["series"] == "系列一"
     assert abp["date"] == "2019-05-10" and abp["year"] == 2019 and abp["kind"] == "censored"
-    assert abp["cover"] == ".shelf/covers/ABP-758.jpg" and abp["poster"] == ".shelf/posters/ABP-758.jpg"
-    assert abp["sheet"] == ".shelf/sheets/ABP-758.jpg"
+    assert abp["cover"] == f"{SHELF_DIR}/covers/ABP-758.jpg" and abp["poster"] == f"{SHELF_DIR}/posters/ABP-758.jpg"
+    assert abp["sheet"] == f"{SHELF_DIR}/sheets/ABP-758.jpg"
     assert len(abp["performers"]) == 2 and len(abp["tags"]) == 1
     entities = read_data_js(paths.site_data / "entities.js")
     names = {p["id"]: p["name"] for p in entities["performers"]}
@@ -179,8 +179,8 @@ def test_index_references_all_data_files(disk):
     result = build_site(connection, paths, ShelfConfig(), split_bytes=600)
     html = (root / "index.html").read_text(encoding="utf-8")
     for name in result.data_files:
-        assert f'src=".shelf/site/data/{name}"' in html, name
-    order = [m.group(1) for m in re.finditer(r'src="\.shelf/site/(?:data/)?([\w.-]+)"', html)]
+        assert f'src="{SHELF_DIR}/site/data/{name}"' in html, name
+    order = [m.group(1) for m in re.finditer(rf'src="{SHELF_DIR}/site/(?:data/)?([\w.-]+)"', html)]
     assert order[0] == "i18n.js"
     assert order[1:1 + len(result.data_files)] == result.data_files
     assert order[-3:] == ["shelf-core.js", "ripple.js", "app.js"]
@@ -197,3 +197,17 @@ def test_i18n_dictionaries_have_same_keys():
     zh = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[0], re.M))
     en = set(re.findall(r"^\s+'([\w.]+)':", text.split("var en = {")[1], re.M))
     assert zh == en and zh
+
+
+def test_site_paths_use_forward_slashes(disk):
+    """站点里的相对路径一律 `/` 分隔、以 `HiddenShelf/` 或媒体相对路径开头，Windows 上浏览器也按 `/` 解析。"""
+    root, paths, connection = disk
+    build_site(connection, paths, ShelfConfig())
+    html = (root / "index.html").read_text(encoding="utf-8")
+    assert f'href="{SHELF_DIR}/site/tokens.css"' in html and ".shelf/" not in html
+    for work in read_data_js(paths.site_data / "works.js"):
+        for key in ("cover", "poster", "sheet"):
+            if work.get(key):
+                assert work[key].startswith(f"{SHELF_DIR}/") and "\\" not in work[key], (key, work[key])
+        for part in work["parts"]:
+            assert "\\" not in part["path"] and not part["path"].startswith("/")

@@ -25,7 +25,7 @@
     'form.sub': '扫描、导入本地资料、联网刮削、归位、媒体、出站',
     'form.root': '盘根目录',
     'form.root.placeholder': '例如 /Volumes/MyDisk',
-    'form.root.help': '盘上会生成 index.html 与 .shelf/，媒体目录旁不写任何文件',
+    'form.root.help': '盘上会生成 index.html 与 HiddenShelf/，媒体目录旁不写任何文件',
     'form.root.required': '请填写盘根目录',
     'form.move': '认不出番号的视频搬到 未识别/',
     'form.offline': '本次不联网',
@@ -99,8 +99,8 @@
     'toast.failed.setup': '运行没能开始',
     'result.failed.setup': '流水线没能开始：{error}',
     'summary.organize.dry_run': '预演：要搬 {move}，已就位 {unchanged}，跳过 {skip}',
-    'form.dry_run': '只预演：列出要搬的文件，不动盘（仍会写 .shelf/）',
-    'result.dry_run': '预演完成，没有动任何文件；清单在 .shelf/logs/ 下',
+    'form.dry_run': '只预演：列出要搬的文件，不动盘（仍会写 HiddenShelf/）',
+    'result.dry_run': '预演完成，没有动任何文件；清单在 HiddenShelf/logs/ 下',
     'toast.dry_run': '预演完成',
     'page.dry_run': '上次预演完成'
   };
@@ -126,7 +126,7 @@
     'form.sub': 'Scan, import local data, scrape online, organize, media, build',
     'form.root': 'Disk root',
     'form.root.placeholder': 'e.g. /Volumes/MyDisk',
-    'form.root.help': 'index.html and .shelf/ are written at the root; nothing is written next to the media',
+    'form.root.help': 'index.html and HiddenShelf/ are written at the root; nothing is written next to the media',
     'form.root.required': 'Enter the disk root',
     'form.move': 'Move unrecognized videos into 未识别/',
     'form.offline': 'Stay offline this run',
@@ -200,8 +200,8 @@
     'toast.failed.setup': 'The run could not start',
     'result.failed.setup': 'The pipeline could not start: {error}',
     'summary.organize.dry_run': 'Preview: {move} to move, {unchanged} in place, {skip} skipped',
-    'form.dry_run': 'Preview only: list the moves, touch nothing (still writes .shelf/)',
-    'result.dry_run': 'Preview finished, nothing was moved; the list is under .shelf/logs/',
+    'form.dry_run': 'Preview only: list the moves, touch nothing (still writes HiddenShelf/)',
+    'result.dry_run': 'Preview finished, nothing was moved; the list is under HiddenShelf/logs/',
     'toast.dry_run': 'Preview finished',
     'page.dry_run': 'Last preview finished'
   };

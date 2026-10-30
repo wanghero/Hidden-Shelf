@@ -107,7 +107,7 @@ class RunResult:
     index_html: Path | None = None
     #: 调用方经 `cancel` 回调在步与步之间停下了；`ok` 仍是已跑步骤的结果。
     cancelled: bool = False
-    #: 预演：`organize` 只列清单，`media`、`build` 跳过，`.shelf/` 之外一个字节没动。
+    #: 预演：`organize` 只列清单，`media`、`build` 跳过，`HiddenShelf/` 之外一个字节没动。
     dry_run: bool = False
 
 
@@ -138,8 +138,8 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
     `cancel()` 只在每步开始前检查：为真就不再开后续步，`result.cancelled = True`。步内不打断——归位是事务、
     刮削每个番号后提交，当前步跑完才停，没有半成品。
 
-    `dry_run=True` 是预演：前三步照常（它们只写 `.shelf/`，是算出计划的前提），`organize` 改成
-    `preview_organize` 只列清单且不再 rescan，`media`、`build` 记 `skipped`；盘上 `.shelf/` 之外不动。
+    `dry_run=True` 是预演：前三步照常（它们只写 `HiddenShelf/`，是算出计划的前提），`organize` 改成
+    `preview_organize` 只列清单且不再 rescan，`media`、`build` 记 `skipped`；盘上 `HiddenShelf/` 之外不动。
     """
     progress = progress or Progress()
     root = Path(root)

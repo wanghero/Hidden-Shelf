@@ -1,4 +1,4 @@
-"""SQLite 工作库 `.shelf/shelf.db`：连接、迁移、实体名归一。"""
+"""SQLite 工作库 `HiddenShelf/shelf.db`：连接、迁移、实体名归一。"""
 from __future__ import annotations
 
 import re

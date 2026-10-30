@@ -17,7 +17,7 @@ def fake_pipeline(*, fail=(), skip=(), gate: threading.Event | None = None, chec
                       "offline": scrape_options.offline if scrape_options else None, "dry_run": dry_run})
         if raise_error:
             raise raise_error
-        result = pipeline.RunResult(log_path=Path(root) / ".shelf" / "logs" / "x.log", dry_run=dry_run)
+        result = pipeline.RunResult(log_path=Path(root) / "HiddenShelf" / "logs" / "x.log", dry_run=dry_run)
         for index, name in enumerate(steps):
             if check_cancel and cancel is not None and cancel():
                 result.cancelled = True

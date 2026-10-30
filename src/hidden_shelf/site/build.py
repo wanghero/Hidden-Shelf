@@ -1,4 +1,4 @@
-"""出站：查询库 → 视图模型 → `.shelf/site/data/*.js` → 渲染 `<root>/index.html` → 拷静态文件。
+"""出站：查询库 → 视图模型 → `HiddenShelf/site/data/*.js` → 渲染 `<root>/index.html` → 拷静态文件。
 
 站点从 `file://` 打开，所以数据只能是 `<script src>` 加载的 `.js`（`window.__shelf.*` 赋值），
 视频与图片一律是相对盘根目录的 POSIX 路径（**不**预先 URL 编码，编码在前端 `encodeMediaPath` 做）。
@@ -21,7 +21,7 @@ from .. import __version__
 from ..config import ShelfConfig
 from ..fsutil import atomic_write_text
 from ..organize.plan import definition_of
-from ..paths import ShelfPaths
+from ..paths import SHELF_DIR, ShelfPaths
 
 Progress = Callable[[str], None]
 
@@ -69,7 +69,7 @@ def _part_key(part: str) -> tuple[int, int, str]:
 
 
 def _shelf_path(rel: str | None) -> str | None:
-    return f".shelf/{rel}" if rel else None
+    return f"{SHELF_DIR}/{rel}" if rel else None
 
 
 def _entity_links(connection: sqlite3.Connection, role: str) -> dict[int, list[int]]:
@@ -84,7 +84,7 @@ def _entity_links(connection: sqlite3.Connection, role: str) -> dict[int, list[i
 
 
 def _source_links(paths: ShelfPaths) -> dict[str, list[dict]]:
-    """每个番号的来源出处 `[{source, url}]`，从 `.shelf/sources/<番号>-<来源>.json` 的成功快照里读。"""
+    """每个番号的来源出处 `[{source, url}]`，从 `HiddenShelf/sources/<番号>-<来源>.json` 的成功快照里读。"""
     found: dict[str, list[dict]] = {}
     if not paths.sources.is_dir():
         return found
@@ -110,7 +110,7 @@ def _avatars(connection: sqlite3.Connection, paths: ShelfPaths) -> dict[int, str
     for row in connection.execute("SELECT id, avatar_file FROM entity WHERE kind='performer' AND avatar_file IS NOT NULL"):
         rel = str(row["avatar_file"] or "").strip()
         if rel and paths.shelf_absolute(rel).is_file():
-            found[int(row["id"])] = f".shelf/{rel}"
+            found[int(row["id"])] = f"{SHELF_DIR}/{rel}"
     return found
 
 
@@ -283,7 +283,7 @@ def build_site(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfC
 
     environment = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=select_autoescape(["html"]))
     html = environment.get_template("index.html.j2").render(
-        site_dir=".shelf/site", data_files=data_files, version=__version__,
+        site_dir=f"{SHELF_DIR}/site", data_files=data_files, version=__version__,
         language=config.language, built_at=meta["builtAt"])
     atomic_write_text(paths.index_html, html)
     progress(f"出站完成：{paths.index_html}")

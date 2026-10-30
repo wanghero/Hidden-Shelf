@@ -20,7 +20,7 @@ from hidden_shelf.organize.apply import (
     rollback_batch,
 )
 from hidden_shelf.organize.plan import SKIP_TARGET_EXISTS, build_plan
-from hidden_shelf.paths import ShelfPaths
+from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 from hidden_shelf.scan import scan
 
 
@@ -115,8 +115,8 @@ def test_apply_sidecars_go_to_legacy(disk):
     assert not any(path.suffix in (".jpg", ".nfo") for path in (root / "Prestige").rglob("*"))
     rows = {r["path"]: r for r in connection.execute("SELECT path,status,moved_to FROM sidecar")}
     assert rows["a/ABP-758.nfo"]["status"] == "moved"
-    assert rows["a/ABP-758.nfo"]["moved_to"] == ".shelf/legacy/ABP-758/ABP-758.nfo"
-    assert rows["a/ABP-758-poster.jpg"]["moved_to"] == ".shelf/legacy/ABP-758/ABP-758-poster.jpg"
+    assert rows["a/ABP-758.nfo"]["moved_to"] == f"{SHELF_DIR}/legacy/ABP-758/ABP-758.nfo"
+    assert rows["a/ABP-758-poster.jpg"]["moved_to"] == f"{SHELF_DIR}/legacy/ABP-758/ABP-758-poster.jpg"
     # 导入的封面还在。
     assert (paths.covers / "ABP-758.jpg").is_file()
 
@@ -161,7 +161,7 @@ def test_remove_empty_dirs(disk):
         assert not (root / name).exists(), name
     # `未识别/` 本身不删，它下面的空目录照删。
     assert (root / "未识别").is_dir() and not (root / "未识别" / "stays").exists()
-    assert paths.sources.is_dir()  # .shelf 下的空目录不动
+    assert paths.sources.is_dir()  # 资料目录下的空目录不动
     assert root.is_dir()
 
 
@@ -202,9 +202,9 @@ def test_organize_reports_progress(disk):
 
 
 def _snapshot(root: Path) -> dict[str, int]:
-    """盘上 .shelf 之外每个文件的大小；预演前后必须一模一样。"""
+    """盘上资料目录之外每个文件的大小；预演前后必须一模一样。"""
     return {str(p.relative_to(root)): p.stat().st_size
-            for p in root.rglob("*") if p.is_file() and ".shelf" not in p.parts}
+            for p in root.rglob("*") if p.is_file() and SHELF_DIR not in p.parts}
 
 
 def test_preview_moves_nothing_and_writes_plan_file(disk):

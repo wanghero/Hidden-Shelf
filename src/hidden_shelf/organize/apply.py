@@ -2,7 +2,7 @@
 
 思路取自 peach `src/peach/organize.py` 的 `_rename`、`_move_one`、`apply_plan`、`rollback_batch`
 （commit 4d5266d327a5971773409b44316e3926bd37c6ba，AGPL-3.0-or-later），按本项目重写：
-单盘根、POSIX 相对路径、逐行 JSONL 批次日志、附属文件随视频搬去 `.shelf/legacy/<番号>/`
+单盘根、POSIX 相对路径、逐行 JSONL 批次日志、附属文件随视频搬去 `HiddenShelf/legacy/<番号>/`
 或跟着未识别视频进 `未识别/`。
 
 只做同一卷内 `os.rename`，绝不删原始文件，绝不覆盖已存在的目标。
@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..config import ShelfConfig
-from ..paths import UNRECOGNIZED_DIR, ShelfPaths
+from ..paths import SHELF_DIR, UNRECOGNIZED_DIR, ShelfPaths
 from .plan import SKIP_TARGET_EXISTS, Plan, build_plan
 
 Progress = Callable[[str], None]
@@ -205,17 +205,18 @@ def _move_one(connection, paths, asset_id: int, old_path: str, new_path: str) ->
 
 
 def remove_empty_dirs(root: Path, *, protect: set[Path] | None = None) -> int:
-    """自底向上删空目录。只删空的；`.shelf`、`未识别`、root 本身与 `protect` 不删。
+    """自底向上删空目录。只删空的；资料目录 `HiddenShelf`、`未识别`、root 本身与 `protect` 不删。
 
     只有 `.DS_Store` 的目录视为空：先删 `.DS_Store` 再删目录。
     """
-    protected = {root.resolve(), (root / ".shelf").resolve(), (root / UNRECOGNIZED_DIR).resolve()}
+    shelf = (root / SHELF_DIR).resolve()
+    protected = {root.resolve(), shelf, (root / UNRECOGNIZED_DIR).resolve()}
     protected |= {path.resolve() for path in (protect or set())}
     removed = 0
     for current, dirs, files in os.walk(root, topdown=False):
         directory = Path(current)
         resolved = directory.resolve()
-        if resolved in protected or resolved.is_relative_to((root / ".shelf").resolve()):
+        if resolved in protected or resolved.is_relative_to(shelf):
             continue
         if files and all(name == ".DS_Store" for name in files):
             for name in files:

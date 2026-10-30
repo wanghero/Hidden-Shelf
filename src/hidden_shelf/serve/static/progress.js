@@ -616,7 +616,7 @@
     refs.resultBox.hidden = state.running || !state.result;
     if (!refs.resultBox.hidden) {
       var result = state.result;
-      // 没有 failed_step 的失败发生在第一步之前（建 .shelf、开库），比如盘是只读的。
+      // 没有 failed_step 的失败发生在第一步之前（建 HiddenShelf、开库），比如盘是只读的。
       var text = result.cancelled ? t('result.cancelled') : result.ok ? (result.dry_run ? t('result.dry_run') : t('result.ok'))
         : result.failed_step ? t('result.failed', { step: stepLabel(result.failed_step), error: result.error || '' }) : t('result.failed.setup', { error: result.error || '' });
       refs.resultBox.appendChild(h('h3', { class: 'card-title', text: t('result.title') }));

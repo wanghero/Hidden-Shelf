@@ -1,5 +1,5 @@
 -- 0001：初始表结构（计划 1 Task 5）。
--- asset.path 是相对盘根目录的 POSIX 路径；cover_file/poster_file/sheet_file 相对 .shelf/。
+-- asset.path 是相对盘根目录的 POSIX 路径；cover_file/poster_file/sheet_file 相对资料目录 HiddenShelf/（改名前叫 .shelf/，库里的相对路径不变）。
 
 CREATE TABLE IF NOT EXISTS schema_version(
     version INTEGER NOT NULL

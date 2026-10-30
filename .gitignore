@@ -6,6 +6,6 @@ __pycache__/
 *.db
 .DS_Store
 reference/
-.shelf/
+HiddenShelf/
 dist/
 CLAUDE.local.md

@@ -35,7 +35,7 @@ class RunOptions:
     move_unrecognized: bool = True
     offline: bool = False
     force_scrape: bool = False
-    #: 只预演：归位只列清单，媒体与出站跳过，`.shelf/` 之外不动。
+    #: 只预演：归位只列清单，媒体与出站跳过，`HiddenShelf/` 之外不动。
     dry_run: bool = False
     steps: tuple[str, ...] = pipeline.STEPS
 

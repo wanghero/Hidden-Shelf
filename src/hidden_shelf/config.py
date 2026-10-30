@@ -1,4 +1,4 @@
-"""本盘设置 `.shelf/config.json`：未识别开关、归位模板、自定义番号规则、站点语言。"""
+"""本盘设置 `HiddenShelf/config.json`：未识别开关、归位模板、自定义番号规则、站点语言。"""
 from __future__ import annotations
 
 import json
