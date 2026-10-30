@@ -32,6 +32,11 @@ SPLIT_BYTES = 5 * 1024 * 1024
 #: 静态文件在 index.html 里的引用顺序（data/* 插在 i18n 之后、shelf-core 之前）。
 STATIC_ORDER = ("tokens.css", "app.css", "i18n.js", "shelf-core.js", "ripple.js", "app.js")
 _KINDS = {"censored", "amateur", "uncensored", "fc2", "other"}
+#: 未识别视频上墙用的哨兵（用户 2026-10-30 定：未识别也列进海报墙，艺人写「素人」，厂牌与系列各加一个「未识别」）。
+#: 前端按当前语言把它们换成文案；哨兵不是中文是为了换语言时也对。
+UNRECOGNIZED_FACET = "__unrecognized__"
+AMATEUR_PERFORMER_ID = 0
+AMATEUR_PERFORMER_NAME = "__amateur__"
 
 
 @dataclass
@@ -142,6 +147,30 @@ def _view_model(connection: sqlite3.Connection, config: ShelfConfig,
     tag_count: dict[int, int] = {}
     studio_count: dict[str, int] = {}
     series_count: dict[str, int] = {}
+    # 没番号的视频也上墙：一个文件一张卡，文件名当标题，厂牌与系列是「未识别」，艺人是「素人」。
+    for row in rows:
+        if row["code_key"]:
+            continue
+        works.append({
+            "id": f"u:{int(row['id'])}", "code": "", "title": row["name"], "originalTitle": "",
+            "studio": UNRECOGNIZED_FACET, "series": UNRECOGNIZED_FACET, "date": "", "year": None,
+            "performers": [AMATEUR_PERFORMER_ID], "tags": [], "plot": "",
+            "duration": float(row["duration"]) if row["duration"] else None,
+            "width": row["width"], "height": row["height"], "definition": definition_of(row["width"], row["height"]),
+            "kind": "unrecognized", "unrecognized": True,
+            "parts": [{
+                "id": int(row["id"]), "path": row["path"], "name": row["name"], "part": "",
+                "size": row["size"], "duration": row["duration"], "container": row["container"],
+                "vcodec": row["vcodec"], "acodec": row["acodec"], "play_hint": row["play_hint"] or "",
+                "sheet": _shelf_path(row["sheet_file"]),
+            }],
+            "cover": _shelf_path(row["cover_file"]), "poster": _shelf_path(row["poster_file"]),
+            "sheet": _shelf_path(row["sheet_file"]),
+            "addedAt": row["first_seen"], "size": int(row["size"] or 0), "sources": [],
+        })
+        performer_count[AMATEUR_PERFORMER_ID] = performer_count.get(AMATEUR_PERFORMER_ID, 0) + 1
+        studio_count[UNRECOGNIZED_FACET] = studio_count.get(UNRECOGNIZED_FACET, 0) + 1
+        series_count[UNRECOGNIZED_FACET] = series_count.get(UNRECOGNIZED_FACET, 0) + 1
     for code_key, members in groups.items():
         members = sorted(members, key=lambda r: (_part_key(r["part"]), int(r["id"])))
         head = members[0]
@@ -200,6 +229,8 @@ def _view_model(connection: sqlite3.Connection, config: ShelfConfig,
         if series:
             series_count[series] = series_count.get(series, 0) + 1
 
+    entity_names[AMATEUR_PERFORMER_ID] = AMATEUR_PERFORMER_NAME
+
     def roster(counter: dict[int, int]) -> list[dict]:
         return sorted(({"id": entity_id, "name": entity_names.get(entity_id, ""), "count": count}
                        for entity_id, count in counter.items()),
@@ -245,7 +276,9 @@ def build_site(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfC
     paths.ensure()
     limit = SPLIT_BYTES if split_bytes is None else split_bytes
     works, entities, unrecognized, totals = _view_model(connection, config, paths)
-    progress(f"出站：{len(works)} 部作品，{len(unrecognized)} 个未识别")
+    # 作品数只算有番号的；未识别的卡虽然也在 works.js 里，计数走 unrecognized。
+    coded = sum(1 for work in works if not work.get("unrecognized"))
+    progress(f"出站：{coded} 部作品，{len(unrecognized)} 个未识别")
 
     # 清掉上次的 data 文件，避免旧分片残留。
     for old in paths.site_data.glob("*.js"):
@@ -269,7 +302,7 @@ def build_site(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfC
         "builtAt": datetime.now().isoformat(timespec="seconds"),
         "language": config.language,
         "counts": {
-            "works": len(works), "performers": len(entities["performers"]), "studios": len(entities["studios"]),
+            "works": coded, "performers": len(entities["performers"]), "studios": len(entities["studios"]),
             "series": len(entities["series"]), "tags": len(entities["tags"]), "unrecognized": len(unrecognized),
         },
         **totals,
@@ -288,7 +321,7 @@ def build_site(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfC
     atomic_write_text(paths.index_html, html)
     progress(f"出站完成：{paths.index_html}")
     return BuildResult(
-        works=len(works), performers=len(entities["performers"]), studios=len(entities["studios"]),
+        works=coded, performers=len(entities["performers"]), studios=len(entities["studios"]),
         series=len(entities["series"]), tags=len(entities["tags"]), unrecognized=len(unrecognized),
         data_files=data_files)
 

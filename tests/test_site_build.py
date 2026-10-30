@@ -75,8 +75,8 @@ def disk(tmp_root: Path):
 def test_build_writes_files(disk):
     root, paths, connection = disk
     result = build_site(connection, paths, ShelfConfig())
-    assert result.works == 3 and result.unrecognized == 1 and result.performers == 2
-    assert result.studios == 1 and result.series == 1 and result.tags == 1
+    assert result.works == 3 and result.unrecognized == 1 and result.performers == 3   # 2 位艺人 + 「素人」哨兵
+    assert result.studios == 2 and result.series == 2 and result.tags == 1   # 各多一个「未识别」
     for name in ("index.html",):
         assert (root / name).is_file()
     for name in ("works.js", "entities.js", "unrecognized.js", "meta.js"):
@@ -110,7 +110,7 @@ def test_works_group_parts(disk):
     entities = read_data_js(paths.site_data / "entities.js")
     names = {p["id"]: p["name"] for p in entities["performers"]}
     assert [names[i] for i in abp["performers"]] == ["甲", "乙"]
-    assert entities["studios"] == [{"id": "Prestige", "name": "Prestige", "count": 1}]
+    assert entities["studios"] == [{"id": "Prestige", "name": "Prestige", "count": 1}, {"id": "__unrecognized__", "name": "__unrecognized__", "count": 1}]
     assert entities["performers"][0]["count"] == 1 and entities["performers"][0]["avatar"] is None
     unrecognized = read_data_js(paths.site_data / "unrecognized.js")
     assert unrecognized[0]["path"] == "c/随手拍 #1 50%.mp4"
@@ -142,7 +142,7 @@ def test_data_js_is_valid(disk):
     works = {work["id"]: work for work in read_data_js(paths.site_data / "works.js")}
     assert works["ABW-358"]["title"] == "x</script><script>alert(1)</script>"
     meta = read_data_js(paths.site_data / "meta.js")
-    assert meta["counts"] == {"works": 3, "performers": 2, "studios": 1, "series": 1, "tags": 1, "unrecognized": 1}
+    assert meta["counts"] == {"works": 3, "performers": 3, "studios": 2, "series": 2, "tags": 1, "unrecognized": 1}
     assert meta["dataFiles"] == ["meta.js", "works.js", "entities.js", "unrecognized.js"]
     assert meta["language"] == "zh" and meta["version"] and meta["builtAt"]
     assert meta["totalBytes"] == 72 and meta["totalDuration"] == 200
@@ -167,7 +167,7 @@ def test_split_when_large(disk, monkeypatch):
             text = (paths.site_data / name).read_text(encoding="utf-8")
             assert ".concat(" in text
             collected.extend(read_data_js(paths.site_data / name))
-    assert {work["id"] for work in collected} == {"ABP-758", "259LUXU-1475", "ABW-358"}
+    assert {work["id"] for work in collected} == {"ABP-758", "259LUXU-1475", "ABW-358", "u:4"}
     # 再 build 一次回到单文件时，旧分片被清掉。
     build_site(connection, paths, ShelfConfig())
     assert not list(paths.site_data.glob("works-*.js"))
@@ -211,3 +211,24 @@ def test_site_paths_use_forward_slashes(disk):
                 assert work[key].startswith(f"{SHELF_DIR}/") and "\\" not in work[key], (key, work[key])
         for part in work["parts"]:
             assert "\\" not in part["path"] and not part["path"].startswith("/")
+
+
+def test_unrecognized_listed_on_wall(disk):
+    """没番号的视频也上墙（用户 2026-10-30 定）：一文件一卡，标题是文件名，厂牌与系列是「未识别」哨兵，艺人是
+    「素人」哨兵实体（id 0）；原来的未识别清单照旧；出站进度行的作品数仍只算有番号的。"""
+    root, paths, connection = disk
+    lines = []
+    build_site(connection, paths, ShelfConfig(), progress=lines.append)
+    assert any(line.startswith("出站：3 部作品，1 个未识别") for line in lines)
+    works = read_data_js(paths.site_data / "works.js")
+    card = next(w for w in works if w["id"].startswith("u:"))
+    assert card["code"] == "" and card["title"] == "随手拍 #1 50%.mp4" and card["kind"] == "unrecognized"
+    assert card["studio"] == "__unrecognized__" and card["series"] == "__unrecognized__" and card["performers"] == [0]
+    assert card["unrecognized"] is True and len(card["parts"]) == 1 and card["parts"][0]["path"] == "c/随手拍 #1 50%.mp4"
+    assert len(works) == 4
+    entities = read_data_js(paths.site_data / "entities.js")
+    assert {"id": "__unrecognized__", "name": "__unrecognized__", "count": 1} in entities["studios"]
+    assert {"id": "__unrecognized__", "name": "__unrecognized__", "count": 1} in entities["series"]
+    amateur = next(p for p in entities["performers"] if p["id"] == 0)
+    assert amateur["name"] == "__amateur__" and amateur["count"] == 1
+    assert len(read_data_js(paths.site_data / "unrecognized.js")) == 1

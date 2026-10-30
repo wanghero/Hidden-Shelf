@@ -36,6 +36,7 @@
   function applyLang() {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
     document.title = t('app.name');
+    localizeData();
   }
 
   function themePref() { var saved = readPref('theme'); return saved === 'light' || saved === 'dark' ? saved : 'system'; }
@@ -111,6 +112,16 @@
   (entities.performers || []).forEach(function (p) { names.performers[p.id] = p.name; if (p.avatar) avatars[p.id] = p.avatar; });
   function avatarOf(pid) { return avatars[pid] || null; }
   (entities.tags || []).forEach(function (tg) { names.tags[tg.id] = tg.name; });
+  /* 未识别视频上墙时的哨兵（build.py 写的）：按当前语言换成「未识别」「素人」。切换语言后要再调一次。 */
+  var UNRECOGNIZED = '__unrecognized__';
+  var AMATEUR = '__amateur__';
+  function isUnrecognizedFacet(value) { return value === UNRECOGNIZED; }
+  function localizeData() {
+    (entities.performers || []).forEach(function (p) { if (p.id === 0 || p.name === AMATEUR) { p.name = t('placeholder.amateur'); names.performers[p.id] = p.name; } });
+    ['studios', 'series'].forEach(function (kind) {
+      (entities[kind] || []).forEach(function (item) { if (item.id === UNRECOGNIZED) item.name = t('placeholder.unrecognized'); });
+    });
+  }
   var probe = document.createElement('video');
   var canPlayType = probe && probe.canPlayType ? function (mime) { return probe.canPlayType(mime); } : null;
 
@@ -236,6 +247,7 @@
     if (dim === 'tags') return names.tags[value] || String(value);
     if (dim === 'years') return value === 'none' ? t('filter.year.none') : String(value);
     if (dim === 'kinds') return t('kind.' + value);
+    if (isUnrecognizedFacet(value)) return t('placeholder.unrecognized');
     return String(value);
   }
 
@@ -355,7 +367,7 @@
         h('div', { class: 'cover-badges' }, work.definition ? badge(work.definition, 'neutral') : null, badge(t('kind.' + (work.kind || 'other')), 'primary')),
         (work.parts || []).length > 1 ? h('div', { class: 'cover-parts tabular', text: '×' + work.parts.length }) : null),
       h('div', { class: 'work-body' },
-        h('div', { class: 'work-code mono', text: work.code }),
+        h('div', { class: 'work-code mono', text: work.code || t('placeholder.unrecognized') }),
         h('div', { class: 'work-title', text: work.title || t('work.untitled'), title: work.title || '' }),
         performers.length ? h('div', { class: 'work-meta', text: performers.join('、') }) : null,
         h('div', { class: 'work-foot' }, h('span', { class: 'tabular', text: core.formatDuration(work.duration) }), playBadge(verdict))));
@@ -424,11 +436,11 @@
 
     function rows() {
       var list = [
-        ['work.code', h('span', { class: 'mono', text: work.code })],
+        ['work.code', h('span', { class: 'mono', text: work.code || t('placeholder.unrecognized') })],
         ['work.title', work.title || t('work.untitled')],
         work.originalTitle ? ['work.originalTitle', work.originalTitle] : null,
-        ['work.studio', work.studio ? h('a', { href: '#/studio/' + encodeURIComponent(work.studio), text: work.studio }) : t('unknown')],
-        work.series ? ['work.series', h('a', { href: '#/series/' + encodeURIComponent(work.series), text: work.series })] : null,
+        ['work.studio', work.studio ? h('a', { href: '#/studio/' + encodeURIComponent(work.studio), text: facetLabel('studios', work.studio) }) : t('unknown')],
+        work.series ? ['work.series', h('a', { href: '#/series/' + encodeURIComponent(work.series), text: facetLabel('series', work.series) })] : null,
         ['work.date', work.date || t('unknown')],
         ['work.duration', core.formatDuration(work.duration) || t('unknown')],
         ['work.resolution', work.width && work.height ? work.width + '×' + work.height + (work.definition ? ' · ' + work.definition : '') : t('unknown')],
@@ -476,7 +488,7 @@
       h('header', { class: 'page-head' },
         h('div', null,
           h('a', { class: 'back-link', href: '#/', 'data-ripple': true }, icon('back'), h('span', { text: t('work.back') })),
-          h('h1', { class: 'page-title', text: work.code }),
+          h('h1', { class: 'page-title', text: work.code || t('placeholder.unrecognized') }),
           h('p', { class: 'page-sub', text: work.title || t('work.untitled') }))),
       h('div', { class: 'work-top' },
         h('section', { class: 'card cover-card' }, imageOrPlaceholder(work.cover || work.poster, t('image.cover') + ' ' + work.code, 'cover')),
