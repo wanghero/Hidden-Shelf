@@ -35,7 +35,7 @@ In one sentence: organize once, and the catalog goes wherever the drive goes.
 | Viewing on another machine | Install a player, rebuild the library | Install the app, re-import | The server must be online | Double-click `index.html` |
 | Needs a running process | No | Yes (the desktop app) | Yes (the service) | No |
 
-**They are not competitors, they are the previous step.** If you already organized with JavSP or MDCx, the "import local data" step reads the NFO files and covers they left behind and does not scrape again. The other way round, Hidden Shelf **does not write NFO** (nothing is written next to your media; `images_in_work_dir` only copies images), so keep their scrapers if you still feed Emby or Jellyfin.
+**They are not competitors, they are the previous step.** If you already organized with JavSP or MDCx, the "import local data" step reads the NFO files and covers they left behind and does not scrape again. The other way round, Hidden Shelf **does not write NFO** (next to your media it only places a copy of the cover and contact sheet, and even that can be turned off), so keep their scrapers if you still feed Emby or Jellyfin.
 
 ## What it does to your disk
 
@@ -53,7 +53,7 @@ One `shelf run` goes through six steps:
 - Only same-volume renames. **Never deletes** an original file, **never overwrites** an existing target.
 - The database is backed up before every organize (last 5 kept).
 - Every batch of moves is logged as JSONL (`HiddenShelf/logs/organize-*.jsonl`) and can be rolled back.
-- All derived output (database, covers, posters, sheets, site data, logs, backups) lives under `HiddenShelf/`; **nothing is written next to your media**.
+- All derived output (database, covers, posters, sheets, site data, logs, backups) lives under `HiddenShelf/`. The only thing placed next to a video is a copy of its cover and contact sheet (`images_in_work_dir`, on by default, taken back when turned off); **nothing else is written next to your media**.
 - `--dry-run` shows the list first: every file that would move and every reason one would not, without touching anything.
 
 ## Install
@@ -93,7 +93,7 @@ open <disk root>/index.html       # 3. look at the result (Windows: double-click
 
 ## Progress page
 
-If you would rather not use the terminal, `shelf serve` starts a small web page bound to `127.0.0.1` only (default `http://127.0.0.1:8031/`; if the port is taken it tries 8000–8099, `--port` picks one, `--no-browser` does not open the browser). Enter the disk root (or click "Browse" next to it and pick with the mouse; folders that already have a library are marked), set the four switches ("move unrecognized videos", "stay offline", "preview only", "force re-scrape") and press Start. Six step rows with status and progress, a live log, and "Open result" when done; "Stop" takes effect after the current step. The page and the CLI run the same pipeline with identical output.
+If you would rather not use the terminal, `shelf serve` starts a small web page bound to `127.0.0.1` only (default `http://127.0.0.1:8031/`; if the port is taken it tries 8000–8099, `--port` picks one, `--no-browser` does not open the browser). Enter the disk root (or click "Browse" next to it and pick with the mouse; folders that already have a library are marked), set the switches ("move unrecognized videos", "stay offline", "preview only", "force re-scrape", "copy cover and sheet next to the video") and press Start. Six step rows with status and progress, a live log, and "Open result" when done; "Stop" takes effect after the current step. The page and the CLI run the same pipeline with identical output.
 
 ## Online scraping
 
@@ -176,7 +176,7 @@ Manual edits go in `HiddenShelf/overrides.json` and are merged on the next `shel
 - **The file name is not a product code.** By default it moves to `未识别/` (keeping the original folder structure) and is listed separately on the site; `--no-move-unrecognized` leaves such files where they are.
 - **NFO files and covers from an earlier scraper?** They are imported first, then moved to `HiddenShelf/legacy/<code>/`, so nothing stays next to the media.
 - **Tags in Japanese or traditional Chinese?** The site shows tags in the current language (CH / EN / JP) from a built-in table of common genres; unknown tags are shown as-is. Add translations in `src/hidden_shelf/tags_i18n.py`.
-- **Want the cover and contact sheet next to the video?** Turn on `images_in_work_dir` (`--images-in-work-dir` on the command line, or the switch in the progress page): copies of the cover and sheet from `HiddenShelf/` are placed beside the video as `<code>-cover.jpg` and `<stem>-sheet.jpg`, follow it when it is moved, and are taken back when the option is turned off; your own images are never touched.
+- **Want the cover and contact sheet next to the video?** That is the default: `images_in_work_dir` is on (turn it off with `--no-images-in-work-dir` or the switch in the progress page). Copies of the cover and sheet from `HiddenShelf/` are placed beside the video as `<code>-cover.jpg` and `<stem>-sheet.jpg`, follow it when it is moved, and are taken back when the option is turned off; your own images are never touched.
 - **Screenshots or notes left in the work's own folder?** A folder whose name carries the code counts as the work's own folder; its top-level loose files move along with the video, names unchanged, subfolders stay. The dry-run plan lists them as `EXTRA` rows.
 - **A move went wrong, how do I roll back?** Each batch has `HiddenShelf/logs/organize-<time>.jsonl`. For now you call `hidden_shelf.organize.apply.rollback_batch(connection, paths, log_path)` from Python; there is no CLI entry point yet.
 - **javdb wants a login.** Log in with your browser and paste the Cookie request header into `sources.javdb.cookie` in the global config.

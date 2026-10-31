@@ -513,7 +513,7 @@
         toggle('offline', 'form.offline', !!refs.offlineValue),
         toggle('dryRun', 'form.dry_run', !!refs.dryRunValue),
         toggle('force', 'form.force', !!refs.forceValue),
-        toggle('images', 'form.images', !!refs.imagesValue)),
+        toggle('images', 'form.images', refs.imagesValue == null ? true : refs.imagesValue)),
       h('div', { class: 'form-actions' }, refs.startButton, refs.openButton, refs.formNote));
   }
 

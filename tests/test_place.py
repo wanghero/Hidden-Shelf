@@ -49,10 +49,15 @@ def _placed(connection):
     return sorted(r[0] for r in connection.execute("SELECT path FROM sidecar WHERE status='placed'"))
 
 
-def test_option_off_by_default_places_nothing(disk):
+def test_option_on_by_default_places_copies(disk):
+    """用户 2026-10-30 定默认开；`--no-images-in-work-dir` 才收回。"""
     root, paths, connection = disk
+    assert ShelfConfig().images_in_work_dir is True
     result = place_images(connection, paths, ShelfConfig())
-    assert (result.copied, result.removed) == (0, 0)
+    assert result.copied > 0 and result.removed == 0
+    assert list(root.glob("*/*-cover.jpg")) and _placed(connection)
+    result = place_images(connection, paths, ShelfConfig(images_in_work_dir=False))
+    assert result.copied == 0 and result.removed > 0
     assert not list(root.glob("*/*-cover.jpg")) and _placed(connection) == []
 
 
