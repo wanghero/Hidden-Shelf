@@ -8,9 +8,9 @@
 |---|---|
 | ![海报墙](docs/images/wall.jpg) | ![作品页](docs/images/detail.jpg) |
 
-| 进度网页 | 目录选择器 |
-|---|---|
-| ![进度网页](docs/images/progress.jpg) | ![目录选择器](docs/images/picker.jpg) |
+| 进度网页 | 设置页 | 目录选择器 |
+|---|---|---|
+| ![进度网页](docs/images/progress.jpg) | ![设置页](docs/images/settings.jpg) | ![目录选择器](docs/images/picker.jpg) |
 
 截图里都是演示数据，前两张就是[在线预览](https://wanghero.github.io/Hidden-Shelf/)。
 

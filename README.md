@@ -8,9 +8,9 @@
 |---|---|
 | ![Poster wall](docs/images/wall.jpg) | ![Work page](docs/images/detail.jpg) |
 
-| Progress page | Folder picker |
-|---|---|
-| ![Progress page](docs/images/progress.jpg) | ![Folder picker](docs/images/picker.jpg) |
+| Progress page | Settings | Folder picker |
+|---|---|---|
+| ![Progress page](docs/images/progress.jpg) | ![Settings](docs/images/settings.jpg) | ![Folder picker](docs/images/picker.jpg) |
 
 All screenshots use demo data; the first two are the [live demo](https://wanghero.github.io/Hidden-Shelf/).
 
