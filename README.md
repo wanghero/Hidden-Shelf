@@ -184,6 +184,8 @@ Manual edits go in `HiddenShelf/overrides.json` and are merged on the next `shel
 - **A `.shelf/` folder from an earlier version?** Since 0.4.2 the data folder is the visible `HiddenShelf/`; the next run of any command renames it automatically. If both folders exist the run refuses and asks you to keep one.
 - **The disk is read-only (NTFS on macOS is the usual case).** The run refuses up front and tells you why and what to do: install an NTFS driver or reformat as exFAT/APFS.
 
+**I ran it on a subfolder first and now want the whole drive as the root. What happens?** The "import local data" step of the parent run finds the `HiddenShelf/` inside the subfolder and reads its titles, studios, performers, tags, covers, contact sheets and scrape history into the parent library (values the parent already has are kept), then moves the subfolder's `HiddenShelf/` and `index.html` to the parent's `HiddenShelf/legacy/nested/<subfolder>/` for safekeeping. Nothing is scraped again and no dead site is left behind. A dry run reads but does not move.
+
 ## Platforms
 
 - macOS: verified (the author's daily driver).

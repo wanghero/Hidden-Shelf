@@ -80,6 +80,15 @@ def _check_owner(owner: str) -> str:
     return owner
 
 
+def is_valid_owner(owner: str | None) -> bool:
+    """归属串写法合不合规（`类别:标识`，类别在清单里）；别的库带来的归属先过这一关。"""
+    try:
+        _check_owner(str(owner or ""))
+    except ValueError:
+        return False
+    return True
+
+
 def is_protected(owner: str | None) -> bool:
     """这个归属是用户的判断吗；无主和自动写入者都不是。"""
     return str(owner or "").startswith(PROTECTED_PREFIXES)

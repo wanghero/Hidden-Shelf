@@ -8,13 +8,14 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from PIL import Image
 
 from . import entities
 from .field_owners import USER_MANUAL, FieldWrite, auto_owner, write_owned_fields
+from .nested import merge_nested_libraries
 from .paths import ShelfPaths
 from .rules.codes import normalise_code_key, part_marker
 from .rules.nfo import read_nfo
@@ -38,13 +39,19 @@ class ImportResult:
     nfo: int = 0
     covers: int = 0
     overrides: int = 0
+    #: 子目录里旧库的合并结果（`nested.NestedResult` 的字段）。
+    nested: dict = field(default_factory=dict)
 
 
 def import_local(connection: sqlite3.Connection, paths: ShelfPaths, *,
-                 progress: Progress = lambda message: None) -> ImportResult:
-    """导入全部待处理的 NFO 与封面，最后合并 `overrides.json`。"""
+                 progress: Progress = lambda message: None, move_nested: bool = True) -> ImportResult:
+    """先合并子目录里的旧库（计划 10），再导入全部待处理的 NFO 与封面，最后合并 `overrides.json`。
+
+    `move_nested=False`（预演）时子库的资料照常读进来，但子库目录留在原地。
+    """
     paths.ensure()
     result = ImportResult()
+    result.nested = asdict(merge_nested_libraries(connection, paths, progress=progress, move=move_nested))
     # 老库里的厂牌别名先改成规范写法（カリビアンコム → Caribbeancom），之后归位与出站才会用新名字。
     renamed = canonicalize_existing(connection)
     if renamed:

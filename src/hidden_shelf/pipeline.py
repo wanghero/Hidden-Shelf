@@ -222,7 +222,7 @@ def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, confi
     if name == "scan":
         return _stats(scan(connection, paths, config, progress=emit))
     if name == "import":
-        return _stats(import_local(connection, paths, progress=emit))
+        return _stats(import_local(connection, paths, progress=emit, move_nested=not dry_run))
     if name == "scrape":
         from .netconfig import GlobalConfig
         from .scrape.run import scrape_assets
