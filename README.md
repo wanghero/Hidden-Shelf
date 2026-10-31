@@ -1,62 +1,73 @@
-# Hidden Shelf（藏片阁）
+# Hidden Shelf
 
-**把一块硬盘上的影片收藏整理成「自带说明书」的整体**：认番号、联网刮削元数据、按 `厂牌/番号/` 归位，然后在盘根目录生成一个纯静态、离线可用的浏览站。所有派生数据只用相对路径住在 `HiddenShelf/` 下，所以整盘复制、搬到别的电脑、换操作系统、做冷备份之后，双击 `index.html` 照样能看能播，不装任何东西。
+**Turns a hard drive full of videos into a self-describing collection.** It recognizes product codes, scrapes metadata, files everything under `studio/code/`, then writes a fully static, offline browsing site at the disk root. Every derived file lives under `HiddenShelf/` and is referenced by relative path, so after you copy the whole drive, move it to another computer, switch operating systems or restore it from a cold backup, double-clicking `index.html` still browses and plays. Nothing to install on the viewing machine.
 
-![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg) · [English](README.en.md)
+![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg) · [中文](README.zh.md) · [Live demo](https://wanghero.github.io/Hidden-Shelf/) (demo data; it is a demo drive published as-is to GitHub Pages)
 
-| 海报墙 | 进度网页 | 目录选择器 |
+| Poster wall | Progress page | Folder picker |
 |---|---|---|
-| ![海报墙](docs/images/wall.jpg) | ![进度网页](docs/images/progress.jpg) | ![目录选择器](docs/images/picker.jpg) |
+| ![Poster wall](docs/images/wall.jpg) | ![Progress page](docs/images/progress.jpg) | ![Folder picker](docs/images/picker.jpg) |
 
-截图里都是演示数据。
+All screenshots use demo data.
 
-## 核心思想：真相在盘里，站点随盘走
+## Core idea: the disk is the truth, the site travels with it
 
-大多数媒体库软件把资料存在软件自己的数据库里：盘换台机器，资料就得重来；软件停止维护，整理过的东西只剩一堆改过名的文件。Hidden Shelf 反过来做：
+Most media library software keeps its knowledge in its own database: move the drive to another machine and you start over; stop using the software and all that is left is a pile of renamed files. Hidden Shelf does the opposite:
 
-- **盘是唯一的真相。** 文件按 `厂牌/番号/` 归位之后，标题、演员、标签、封面、九宫格、索引全部写进盘根目录下的 `HiddenShelf/`，是普通文件，不依赖本机的任何状态。
-- **站点是纯静态的。** `index.html` 和它引用的数据、图片、视频一律是相对路径，用 `file://` 直接打开，没有服务器、没有数据库服务、不联网、不装运行时。手机、电视盒子、别人的电脑，只要有浏览器就能看。
-- **整体可搬。** 把盘根目录整个复制或移动到另一块盘、另一台机器、另一个系统，站点不用重新生成；做冷备份时备份的就是一份连同说明书的完整收藏。
-- **整理可重复。** 在盘内部挪动或改名文件之后，再跑一次 `shelf run`，程序按已有资料接着做，不会重复刮削、不会覆盖你手改过的字段。
-- **程序可以消失。** 哪天不再用 Hidden Shelf，盘上留下的是规整的目录、开放格式的 `shelf.db`（SQLite）、JPEG 和一个能打开的网页，不是私有格式。
+- **The disk is the single source of truth.** Once files are filed under `studio/code/`, titles, performers, tags, covers, contact sheets and the index are all written to `HiddenShelf/` at the disk root as plain files. Nothing depends on the state of the machine that ran it.
+- **The site is purely static.** `index.html`, its data, images and videos use relative paths only. It opens from `file://` with no server, no database service, no network and no runtime. A phone, a TV box, a friend's laptop: anything with a browser can browse it.
+- **The whole thing is portable.** Copy or move the root directory to another drive, machine or operating system and the site keeps working without a rebuild. A cold backup of the drive is a complete collection with its own catalog.
+- **Organizing is repeatable.** After you move or rename files inside the collection, run `shelf run` again: it continues from the data it already has, never re-scrapes what it knows and never overwrites fields you edited by hand.
+- **The program can disappear.** If you stop using Hidden Shelf one day, what remains on the disk is a tidy directory tree, an open-format `shelf.db` (SQLite), JPEGs and a web page that opens. No proprietary format.
 
-一句话：整理一次，站点就跟着盘走，盘到哪里都能看。
+In one sentence: organize once, and the catalog goes wherever the drive goes.
 
-## 它会对你的盘做什么
+## How it differs from similar tools
 
-一次 `shelf run` 走六步：
+| | Scrapers such as JavSP, MDCx | Desktop libraries such as Jvedio | Emby, Jellyfin, Kodi | Hidden Shelf |
+|---|---|---|---|---|
+| Main job | Scrape and rename, write NFO and images for a player | Manage and browse inside a desktop app | Media server or player that builds its library from NFO | Scrape, file, and write the browsing site onto the drive |
+| Where the data lives | NFO and images next to the videos | The app's own database | The server's database | `HiddenShelf/` at the disk root plus a static site |
+| Viewing on another machine | Install a player, rebuild the library | Install the app, re-import | The server must be online | Double-click `index.html` |
+| Needs a running process | No | Yes (the desktop app) | Yes (the service) | No |
 
-1. **扫描**：登记盘上每个视频与它旁边的附属文件（NFO、封面、字幕），认出文件名里的番号。
-2. **导入本地资料**：读以前刮削器留下的 NFO 与封面，以及你手写的 `HiddenShelf/overrides.json`。
-3. **联网刮削**：缺资料的番号去各站问标题、厂牌、演员、标签、发行日、封面与头像；断网就跳过，不拦后面。
-4. **归位**：按 `厂牌/番号/番号[-cdN].ext` 改名归位；认不出番号的视频集中到 `未识别/`。
-5. **媒体**：探测时长与分辨率，抽帧做九宫格，没有封面的用抽帧兜底，裁出竖版海报。
-6. **出站**：在盘根目录写 `index.html`，离线可开的海报墙，按演员、厂牌、标签筛选，点开直接播放。
+**They are not competitors, they are the previous step.** If you already organized with JavSP or MDCx, the "import local data" step reads the NFO files and covers they left behind and does not scrape again. The other way round, Hidden Shelf **does not write NFO** (nothing is written next to your media; `images_in_work_dir` only copies images), so keep their scrapers if you still feed Emby or Jellyfin.
 
-**安全承诺**（都有测试钉住）：
+## What it does to your disk
 
-- 只做同一卷内的改名，**绝不删除**任何原始文件，**绝不覆盖**已经存在的目标。
-- 归位前自动备份数据库（保留最近 5 份）。
-- 每批搬运写一份 JSONL 日志（`HiddenShelf/logs/organize-*.jsonl`），可以回滚。
-- 所有派生产物（库、封面、海报、九宫格、站点数据、日志、备份）只在 `HiddenShelf/` 下；**媒体目录旁不写任何文件**。
-- `--dry-run` 先看清单再动手：列出每个要搬的文件与不搬的原因，一个文件不动。
+One `shelf run` goes through six steps:
 
-## 安装
+1. **Scan**: registers every video and its sidecars (NFO, cover, subtitles) and recognizes the product code in the file name.
+2. **Import local data**: reads NFO files and covers left by earlier scrapers, plus your hand-written `HiddenShelf/overrides.json`.
+3. **Scrape online**: asks the sources for title, studio, performers, tags, release date, cover and avatars where data is missing; offline it just skips, the later steps still run.
+4. **Organize**: renames into `studio/code/code[-cdN].ext`; videos without a recognizable code go to `未识别/` ("unrecognized").
+5. **Media**: probes duration and resolution, extracts frames for a contact sheet, uses a frame as the cover when none exists, crops a portrait poster.
+6. **Build**: writes `index.html` at the disk root, an offline poster wall with filters by performer, studio and tag; click to play.
 
-前置：Python ≥ 3.12，以及系统 ffmpeg/ffprobe（「媒体」步要用，找不到会停在那一步并提示怎么装）。
+**Safety promises** (each pinned by tests):
 
-- macOS：`brew install ffmpeg`
-- Debian/Ubuntu：`sudo apt install ffmpeg`
-- Windows：从 [ffmpeg.org](https://ffmpeg.org/download.html) 下载，把 `bin/` 加进 PATH
+- Only same-volume renames. **Never deletes** an original file, **never overwrites** an existing target.
+- The database is backed up before every organize (last 5 kept).
+- Every batch of moves is logged as JSONL (`HiddenShelf/logs/organize-*.jsonl`) and can be rolled back.
+- All derived output (database, covers, posters, sheets, site data, logs, backups) lives under `HiddenShelf/`; **nothing is written next to your media**.
+- `--dry-run` shows the list first: every file that would move and every reason one would not, without touching anything.
 
-装命令行工具（二选一）：
+## Install
+
+Prerequisites: Python ≥ 3.12 and system ffmpeg/ffprobe (the media step needs them; if they are missing the run stops there and tells you how to install them).
+
+- macOS: `brew install ffmpeg`
+- Debian/Ubuntu: `sudo apt install ffmpeg`
+- Windows: download from [ffmpeg.org](https://ffmpeg.org/download.html) and add `bin/` to PATH
+
+Install the CLI (either one):
 
 ```bash
 uv tool install git+https://github.com/wanghero/Hidden-Shelf
 pipx install git+https://github.com/wanghero/Hidden-Shelf
 ```
 
-开发者：
+Developers:
 
 ```bash
 git clone https://github.com/wanghero/Hidden-Shelf && cd Hidden-Shelf
@@ -64,28 +75,28 @@ uv sync
 uv run shelf --version
 ```
 
-## 三步上手
+## Three steps
 
 ```bash
-shelf run <盘根目录> --dry-run   # 1. 预演：只列清单
-shelf run <盘根目录>             # 2. 真跑
-open <盘根目录>/index.html       # 3. 看成品（Windows 双击 index.html）
+shelf run <disk root> --dry-run   # 1. preview: list only
+shelf run <disk root>             # 2. the real run
+open <disk root>/index.html       # 3. look at the result (Windows: double-click index.html)
 ```
 
-1. **预演**：终端打出「预演：N 个要搬，M 个已就位，K 个跳过」，每个要搬的文件一行 `现路径 → 目标`，超过 200 条的完整清单在 `HiddenShelf/logs/plan-<时间>.txt`。预演会扫描、导入本地资料、联网刮削（这是算出计划的前提，都只写 `HiddenShelf/`），盘上其它地方一个文件不动。
-2. **真跑**：同样的参数，搬的就是预演列出的那些。每步打一行完成摘要，结束打「成品：…/index.html」。
-3. **看成品**：双击盘根目录的 `index.html`。换台电脑插上盘也能看，路径全是相对的。
+1. **Preview**: the terminal prints "N to move, M in place, K skipped", one line `current → target` per move; past 200 lines the full list is in `HiddenShelf/logs/plan-<time>.txt`. A preview still scans, imports local data and scrapes (that is how the plan is computed, and all of it writes only to `HiddenShelf/`); nothing else on the disk is touched.
+2. **Real run**: same arguments, moves exactly what the preview listed. Each step prints a one-line summary; it ends with the path of `index.html`.
+3. **Result**: double-click `index.html` at the disk root. Plug the drive into another machine and it still works; every path is relative.
 
-## 进度网页
+## Progress page
 
-不想用终端就 `shelf serve`：在本机起一个只监听 `127.0.0.1` 的网页（默认 `http://127.0.0.1:8031/`，端口被占就在 8000–8099 内往后找，`--port` 可指定，`--no-browser` 不自动打开浏览器）。填盘根目录（或点旁边的「浏览」按钮用鼠标选，整理过的目录带「已有库」标记），四个开关：「认不出番号的视频搬到 未识别/」「本次不联网」「只预演」「强制重刮」，点「开始」。六步各一行状态与进度，日志实时滚动，跑完有「打开成品」；「停止」在当前步完成后生效。网页和命令行跑的是同一条流水线，输出一字不差。
+If you would rather not use the terminal, `shelf serve` starts a small web page bound to `127.0.0.1` only (default `http://127.0.0.1:8031/`; if the port is taken it tries 8000–8099, `--port` picks one, `--no-browser` does not open the browser). Enter the disk root (or click "Browse" next to it and pick with the mouse; folders that already have a library are marked), set the four switches ("move unrecognized videos", "stay offline", "preview only", "force re-scrape") and press Start. Six step rows with status and progress, a live log, and "Open result" when done; "Stop" takes effect after the current step. The page and the CLI run the same pipeline with identical output.
 
-## 联网刮削
+## Online scraping
 
-### 全局配置
+### Global config
 
-刮削用到的代理与各站 Cookie 放在 `~/.hidden-shelf/config.json`（环境变量 `HIDDEN_SHELF_HOME` 可改目录），第一次运行会写出默认值。
-凭据只住在这里：不进盘里的任何文件、不进日志、不进快照。`shelf config` 也只说有没有，不打印值。
+Proxy and per-site cookies live in `~/.hidden-shelf/config.json` (`HIDDEN_SHELF_HOME` changes the directory); the first run writes the defaults.
+Credentials live only there: never in any file on the disk, never in logs, never in snapshots. `shelf config` only reports whether a cookie is set, never its value.
 
 ```json
 {
@@ -99,101 +110,100 @@ open <盘根目录>/index.html       # 3. 看成品（Windows 双击 index.html�
 }
 ```
 
-- `network.mode`：`environment`（跟随 `HTTPS_PROXY` 等环境变量）、`direct`（忽略环境变量直连）、`proxy`（用 `network.proxy`，如 `http://127.0.0.1:7890` 或 `socks5h://127.0.0.1:1080`）。
-- `sources.<站>.cookie`：浏览器里复制的一行 Cookie 请求头；只有 javdb（配额与登录墙）和 javbus（年龄门）需要。`enabled: false` 整站不问。
+- `network.mode`: `environment` (follow `HTTPS_PROXY` etc.), `direct` (ignore the environment and connect directly), `proxy` (use `network.proxy`, e.g. `http://127.0.0.1:7890` or `socks5h://127.0.0.1:1080`).
+- `sources.<site>.cookie`: the one-line Cookie request header copied from your browser; only javdb (quota and login wall) and javbus (age gate) need one. `enabled: false` disables a site.
 
-不想手抄 Cookie 的话，用登录功能：装一次 Playwright（`uv sync --extra login`，再 `uv run playwright install chromium`），然后
+If you would rather not copy cookies by hand, sign in through a browser: install Playwright once (`uv sync --extra login`, then `uv run playwright install chromium`) and run
 
 ```bash
-uv run shelf login javdb      # 弹出浏览器，登录完关掉窗口或按回车；javbus 同理
+uv run shelf login javdb      # a browser opens; sign in, then close the window or press Enter. Same for javbus
 ```
 
-进度网页 `shelf serve` 里的「来源与登录」面板也能做同样的事，并且每站有开关、冷却中的站可以一键清除。AVBase 不用登录：它的 Cloudflare 认的是 TLS 指纹，装上 `curl_cffi`（`uv sync --extra fingerprint`）就能过，面板上会显示装没装。Cookie 与浏览器 UA 只存在本机的全局配置里，不进盘、日志和快照。
-- `routes`：整条替换某类番号的来源链。内容类型 `censored | amateur | uncensored | fc2`，来源名 `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`。每站各是一档、逐家短路：有一家答了就停。
+The "Sources & sign-in" panel in `shelf serve` does the same, with a per-site switch and a one-click "clear pause" for sites in cooldown. AVBase needs no sign-in: its Cloudflare check looks at the TLS fingerprint, so install `curl_cffi` (`uv sync --extra fingerprint`) and it passes; the panel shows whether it is installed. Cookies and the browser's User-Agent live only in the local global config, never on the disk, in logs or in snapshots.- `routes`: replaces the whole source chain for a content type. Types are `censored | amateur | uncensored | fc2`; sources are `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`. Each site is its own tier and the chain short-circuits: the first site that answers wins.
 
-快照（`<番号>-<来源>.json`）与来源冷却（`_cooldown.json`）在 `<盘根>/HiddenShelf/sources/`，7 天内不重问；403 首停 15 分钟连着翻倍，429 按站方说的时间。
+Snapshots (`<code>-<source>.json`) and cooldowns (`_cooldown.json`) live in `<disk root>/HiddenShelf/sources/`; a code is not asked again within 7 days. A 403 pauses the site for 15 minutes, doubling on repeat; a 429 honors the site's Retry-After.
 
-### 来源
+### Sources
 
-| 来源 | 内容类型 | 需要 Cookie | 2026-10-29 本机冒烟 |
+| Source | Content | Cookie needed | Smoke test on the author's machine, 2026-10-29 |
 |---|---|---|---|
-| r18dev | 有码 | 否 | 直连可用 |
-| dmm | 有码 | 否 | 对 `ABW-358` 回「没有这个番号」 |
-| 1pondo | 无码（一本道） | 否 | 未测 |
-| fc2 | FC2 | 否 | 直连可用 |
-| javarchive | FC2（下架转载） | 否 | 直连可用 |
-| javdb | 有码、素人、无码、FC2 | 是 | 直连可用 |
-| javbus | 有码、素人、无码 | 是（年龄门） | 直连可用 |
-| avbase | 有码、素人、无码 | 否（但要过 Cloudflare） | 回 403 进冷却，需要浏览器 Cookie |
+| r18dev | censored | no | works directly |
+| dmm | censored | no | answered "no such code" for `ABW-358` |
+| 1pondo | uncensored (1pondo) | no | not tested |
+| fc2 | FC2 | no | works directly |
+| javarchive | FC2 (delisted reposts) | no | works directly |
+| javdb | censored, amateur, uncensored, FC2 | yes | works directly |
+| javbus | censored, amateur, uncensored | yes (age gate) | works directly |
+| avbase | censored, amateur, uncensored | no (but Cloudflare) | 403, went into cooldown; needs a browser cookie |
 
-默认链：有码 `r18dev → dmm → avbase → javbus → javdb`；素人 `avbase → javbus → javdb → r18dev`；无码 `1pondo → avbase → javbus → javdb`；FC2 `fc2 → javarchive → javdb`。多来源分歧时本地 NFO 最高，其次官方站，社区站兜底；你在 `overrides.json` 里写的永远不被覆盖。
+Default chains: censored `r18dev → dmm → avbase → javbus → javdb`; amateur `avbase → javbus → javdb → r18dev`; uncensored `1pondo → avbase → javbus → javdb`; FC2 `fc2 → javarchive → javdb`. When sources disagree, a local NFO ranks highest, then official sites, then community sites; whatever you write in `overrides.json` is never overwritten.
 
-## 盘上的布局
+## Layout on the disk
 
 ```
-<盘根>/
-  index.html                       成品，双击打开
-  厂牌/番号/番号[-cdN].ext           归位后的视频（模板可改）
-  未识别/…                          认不出番号的视频，保留原目录层级
+<disk root>/
+  index.html                       the result, double-click to open
+  studio/code/code[-cdN].ext       organized videos (template is configurable)
+  未识别/…                          unrecognized videos, original folder structure kept
   HiddenShelf/
-    shelf.db                       SQLite 库，真相在这里
-    config.json                    这块盘的设置：模板、是否搬未识别、站点语言、是否联网
-    overrides.json                 你手改的字段，优先级最高
-    site/                          站点数据（works.js 等）
-    covers/  posters/  sheets/     封面、竖版海报、九宫格
-    avatars/                       演员头像
-    sources/                       刮削快照与冷却
-    legacy/<番号>/                  旧 NFO 与封面留底
-    logs/                          run-*.log、organize-*.jsonl、plan-*.txt
-    backups/                       归位前的库备份（5 份）
+    shelf.db                       SQLite database, the source of truth
+    config.json                    per-disk settings: templates, move unrecognized, site language, scrape on/off
+    overrides.json                 your manual edits, highest priority
+    site/                          site data (works.js and friends)
+    covers/  posters/  sheets/     covers, portrait posters, contact sheets
+    avatars/                       performer avatars
+    sources/                       scrape snapshots and cooldowns
+    legacy/<code>/                 old NFO files and covers, kept
+    logs/                          run-*.log, organize-*.jsonl, plan-*.txt
+    backups/                       database backups taken before organizing (5 kept)
 ```
 
-手改入口 `HiddenShelf/overrides.json`，下次 `shelf run` 自动合并：
+Manual edits go in `HiddenShelf/overrides.json` and are merged on the next `shelf run`:
 
 ```json
 {
-  "ABP-758": { "title": "改过的标题", "studio": "Prestige", "performers": ["铃村あいり"], "tags": ["单体作品"] }
+  "ABP-758": { "title": "Corrected title", "studio": "Prestige", "performers": ["鈴村あいり"], "tags": ["solo"] }
 }
 ```
 
-## 常见问题
+## FAQ
 
-- **换台电脑能看吗？** 能。站点里全是相对路径，盘插哪台机器都一样。
-- **文件名不是番号怎么办？** 默认搬到 `未识别/`（保留原目录层级），站点里单独列出；`--no-move-unrecognized` 可以让它们原地不动。
-- **以前刮削器留下的 NFO 和封面？** 先导入，再搬到 `HiddenShelf/legacy/<番号>/` 留底，媒体目录旁不再留附属文件。
-- **标签是日文或繁体，看不惯？** 站点按当前语言（CH / EN / JP）显示标签，常见类别内置了对照表；表里没有的原样显示。想补翻译改 `src/hidden_shelf/tags_i18n.py` 一张表即可。
-- **想在视频旁边直接看到封面和九宫格？** 开 `images_in_work_dir`（命令行 `--images-in-work-dir`，或进度网页的开关）：程序把 `HiddenShelf/` 里的封面与九宫格复制一份到视频所在目录（`<番号>-cover.jpg`、`<主名>-sheet.jpg`），归位时跟着走，关掉选项就收回，你自己放的图片不碰。
-- **作品文件夹里还有截图、说明之类的零散文件？** 文件夹名里带着这个番号的，算作品自己的文件夹，里面顶层的零散文件跟着视频一起进新目录，名字不变；子目录不动。预演清单里以 `EXTRA` 行列出。
-- **搬错了怎么回滚？** 每批有 `HiddenShelf/logs/organize-<时间>.jsonl`。目前要在 Python 里调 `hidden_shelf.organize.apply.rollback_batch(connection, paths, 日志路径)`，命令行入口还没有。
-- **javdb 要登录？** 浏览器登录后把 Cookie 请求头贴进全局配置的 `sources.javdb.cookie`。
-- **跑一半断网？** 刮削失败只记本步，归位、媒体、出站照常；下次有网再跑一遍补资料。
-- **以前版本留下的 `.shelf/`？** 0.4.2 起资料目录改名为可见的 `HiddenShelf/`，再跑一次任何命令会自动改名，不用手动搬；两个目录都在时会拒绝运行并提示保留一个。
-- **盘是只读的（macOS 插 NTFS 盘最常见）？** 开跑前会直接告诉你原因与怎么办：装 NTFS 驱动或改 exFAT/APFS。
+- **Does it work on another computer?** Yes. The site uses relative paths only, so the drive works wherever it is plugged in.
+- **The file name is not a product code.** By default it moves to `未识别/` (keeping the original folder structure) and is listed separately on the site; `--no-move-unrecognized` leaves such files where they are.
+- **NFO files and covers from an earlier scraper?** They are imported first, then moved to `HiddenShelf/legacy/<code>/`, so nothing stays next to the media.
+- **Tags in Japanese or traditional Chinese?** The site shows tags in the current language (CH / EN / JP) from a built-in table of common genres; unknown tags are shown as-is. Add translations in `src/hidden_shelf/tags_i18n.py`.
+- **Want the cover and contact sheet next to the video?** Turn on `images_in_work_dir` (`--images-in-work-dir` on the command line, or the switch in the progress page): copies of the cover and sheet from `HiddenShelf/` are placed beside the video as `<code>-cover.jpg` and `<stem>-sheet.jpg`, follow it when it is moved, and are taken back when the option is turned off; your own images are never touched.
+- **Screenshots or notes left in the work's own folder?** A folder whose name carries the code counts as the work's own folder; its top-level loose files move along with the video, names unchanged, subfolders stay. The dry-run plan lists them as `EXTRA` rows.
+- **A move went wrong, how do I roll back?** Each batch has `HiddenShelf/logs/organize-<time>.jsonl`. For now you call `hidden_shelf.organize.apply.rollback_batch(connection, paths, log_path)` from Python; there is no CLI entry point yet.
+- **javdb wants a login.** Log in with your browser and paste the Cookie request header into `sources.javdb.cookie` in the global config.
+- **The network dropped mid-run.** A scrape failure is recorded for that step only; organize, media and build still run. Run again when you are online to fill in the gaps.
+- **A `.shelf/` folder from an earlier version?** Since 0.4.2 the data folder is the visible `HiddenShelf/`; the next run of any command renames it automatically. If both folders exist the run refuses and asks you to keep one.
+- **The disk is read-only (NTFS on macOS is the usual case).** The run refuses up front and tells you why and what to do: install an NTFS driver or reformat as exFAT/APFS.
 
-## 平台
+## Platforms
 
-- macOS：已验证（作者日常使用）。
-- Linux：由 CI 验证。
-- Windows：**未验证**。CI 允许这一路失败，欢迎反馈。
+- macOS: verified (the author's daily driver).
+- Linux: verified by CI.
+- Windows: **not verified**. The CI job is allowed to fail; reports welcome.
 
-## 免责声明
+## Disclaimer
 
-- 这是面向成年人（18+）内容的整理工具。
-- 只抓公开的元数据与封面，不下载视频。
-- 不内置任何站点凭据；Cookie 与各站的使用条款由你自己负责。
-- 程序设计上不删、不覆盖、归位前备份，但**备份仍是你自己的事**，对数据丢失不承担责任。
+- This tool is for adult (18+) content.
+- It fetches public metadata and covers only; it does not download videos.
+- No site credentials are bundled; cookies and each site's terms of use are your responsibility.
+- The program is designed not to delete or overwrite and backs up before organizing, but **backups are still your job**; no liability is accepted for data loss.
 
-## 许可与致谢
+## License and credits
 
-- 许可 **AGPL-3.0-or-later**：可以改、可以商用，但改过的版本拿去提供网络服务也必须开源。
-- 策略模块移植自 [peach-mitao/peach](https://github.com/peach-mitao/peach)（AGPL-3.0），逐文件登记在 `docs/REUSE.md`。
-- 界面规范来自 `docs/ux-standard/`。
+- **AGPL-3.0-or-later**: modify and use it commercially, but a modified version offered as a network service must be open-sourced too.
+- The rule modules are ported from [peach-mitao/peach](https://github.com/peach-mitao/peach) (AGPL-3.0), file by file in `docs/REUSE.md`.
+- The UI follows `docs/ux-standard/`.
 
-## 设计历史
+## Design history
 
-- 设计文档：`docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`
-- 计划 1（本地流水线）：`docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`
-- 计划 2（联网刮削）：`docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`
-- 计划 3（进度网页）：`docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`
-- 计划 4（盘根目录鼠标选择）：`docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`
-- 计划 5（开源准备）：`docs/superpowers/plans/2026-10-29-plan-5-open-source.md`
+- Design document: `docs/superpowers/specs/2026-10-28-hidden-shelf-design.md`
+- Plan 1 (local pipeline): `docs/superpowers/plans/2026-10-28-plan-1-local-pipeline.md`
+- Plan 2 (online scraping): `docs/superpowers/plans/2026-10-28-plan-2-online-scraping.md`
+- Plan 3 (progress page): `docs/superpowers/plans/2026-10-29-plan-3-progress-web.md`
+- Plan 4 (folder picker): `docs/superpowers/plans/2026-10-29-plan-4-folder-picker.md`
+- Plan 5 (open-source prep): `docs/superpowers/plans/2026-10-29-plan-5-open-source.md`

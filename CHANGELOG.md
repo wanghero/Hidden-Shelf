@@ -2,6 +2,13 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 1.4.5 - 2026-10-30
+
+### 新增
+
+- `scripts/make_demo.py`：用虚构数据造一块演示盘（ffmpeg 合成视频、Pillow 画封面、`overrides.json` 给资料），离线跑完整流水线；`.github/workflows/pages.yml` 把它发到 GitHub Pages 当在线预览。
+- README 改以英文版 `README.md` 为主入口，中文版改名 `README.zh.md`；开头改写为「真相在盘里，站点随盘走」并加「核心思想」「和同类工具的区别」两节。
+
 ## 1.4.4 - 2026-10-30
 
 ### 变更

@@ -1,0 +1,43 @@
+# 在线预览：用 scripts/make_demo.py 生成一块演示盘（虚构数据、ffmpeg 合成视频、不联网），整个目录发到 GitHub Pages。
+# 站点本来就是纯静态、相对路径的，所以放到 Pages 上和插盘双击 index.html 是同一份东西。
+# 仓库 Settings → Pages 的 Source 要选 GitHub Actions；私有仓库的免费账号开不了 Pages，公开后才生效。
+name: pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - scripts/make_demo.py
+      - .github/workflows/pages.yml
+      - pyproject.toml
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync
+      - run: uv run python scripts/make_demo.py dist/demo
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/demo
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
