@@ -4,11 +4,15 @@
 
 ![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg) · [English](README.md) · [在线预览](https://wanghero.github.io/Hidden-Shelf/)（演示数据，就是把一块演示盘原样放到 GitHub Pages 上）
 
-| 海报墙 | 进度网页 | 目录选择器 |
-|---|---|---|
-| ![海报墙](docs/images/wall.jpg) | ![进度网页](docs/images/progress.jpg) | ![目录选择器](docs/images/picker.jpg) |
+| 海报墙 | 作品页 |
+|---|---|
+| ![海报墙](docs/images/wall.jpg) | ![作品页](docs/images/detail.jpg) |
 
-截图里都是演示数据。
+| 进度网页 | 目录选择器 |
+|---|---|
+| ![进度网页](docs/images/progress.jpg) | ![目录选择器](docs/images/picker.jpg) |
+
+截图里都是演示数据，前两张就是[在线预览](https://wanghero.github.io/Hidden-Shelf/)。
 
 ## 核心思想：真相在盘里，站点随盘走
 

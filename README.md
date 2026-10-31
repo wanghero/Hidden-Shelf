@@ -4,11 +4,15 @@
 
 ![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg) · [中文](README.zh.md) · [Live demo](https://wanghero.github.io/Hidden-Shelf/) (demo data; it is a demo drive published as-is to GitHub Pages)
 
-| Poster wall | Progress page | Folder picker |
-|---|---|---|
-| ![Poster wall](docs/images/wall.jpg) | ![Progress page](docs/images/progress.jpg) | ![Folder picker](docs/images/picker.jpg) |
+| Poster wall | Work page |
+|---|---|
+| ![Poster wall](docs/images/wall.jpg) | ![Work page](docs/images/detail.jpg) |
 
-All screenshots use demo data.
+| Progress page | Folder picker |
+|---|---|
+| ![Progress page](docs/images/progress.jpg) | ![Folder picker](docs/images/picker.jpg) |
+
+All screenshots use demo data; the first two are the [live demo](https://wanghero.github.io/Hidden-Shelf/).
 
 ## Core idea: the disk is the truth, the site travels with it
 
