@@ -26,6 +26,8 @@ class ShelfConfig:
     scrape: bool = True
     #: 把封面与九宫格复制一份到视频所在目录（`<番号>-cover.jpg`、`<主名>-sheet.jpg`；计划 9）。默认不放。
     images_in_work_dir: bool = True
+    #: 媒体步要不要做九宫格（抽 9 帧拼图，最耗时的一步）；关掉只跳过生成，已有的不删。
+    sheets: bool = True
 
     @classmethod
     def load(cls, paths: ShelfPaths) -> "ShelfConfig":

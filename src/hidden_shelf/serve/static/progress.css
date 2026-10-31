@@ -32,6 +32,9 @@
 .nav-item .icon svg { stroke-width: 1.75; }
 .nav-item:hover { background: var(--surface-hover); color: var(--fg); }
 .nav-item.active { background: var(--primary); color: var(--on-primary); box-shadow: var(--primary-shadow); }
+.nav-item .nav-label { flex: 1; }
+.nav-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); flex: none; }
+.nav-item.active .nav-dot { background: var(--on-primary); box-shadow: none; }
 .sidebar-footer { display: flex; flex-direction: column; gap: var(--space-1); padding-top: var(--space-4); border-top: 1px solid var(--border); }
 .theme-wrap { position: relative; }
 .footer-button {
@@ -92,6 +95,13 @@
 .form-note { font-size: var(--text-sm); color: var(--fg-muted); }
 
 .switches { display: flex; flex-direction: column; gap: var(--space-2); }
+.switch-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.switch-help { font-size: var(--text-xs); color: var(--fg-subtle); }
+.mono-path { font-family: var(--font-mono); overflow-wrap: anywhere; margin-top: var(--space-3); }
+.settings-cols { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.view-log .log-card { min-height: calc(100vh - 220px); }
+.view-log .log { height: auto; flex: 1; min-height: 420px; }
+.view-log .log-wrap { display: flex; flex-direction: column; }
 .switch { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch-min); padding: var(--space-2) var(--space-3); border-radius: var(--radius); cursor: pointer; font-size: var(--text-base); }
 .switch:hover { background: var(--surface-hover); }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }

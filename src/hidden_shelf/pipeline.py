@@ -241,7 +241,7 @@ def _execute(name: str, connection: sqlite3.Connection, paths: ShelfPaths, confi
         stats["rescan"] = _stats(rescan)
         return stats
     if name == "media":
-        stats = _stats(process_assets(connection, paths, progress=emit))
+        stats = _stats(process_assets(connection, paths, progress=emit, sheets=config.sheets))
         stats["placed"] = _stats(place_images(connection, paths, config, progress=emit))
         return stats
     if name == "build":

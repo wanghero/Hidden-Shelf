@@ -136,6 +136,10 @@ def test_options_from_payload_validation(tmp_root: Path):
     assert dry.dry_run is True and dry.to_dict()["dry_run"] is True
     with pytest.raises(ValueError, match="dry_run"):
         RunOptions.from_payload({"root": str(tmp_root), "dry_run": "yes"})
+    assert RunOptions.from_payload({"root": str(tmp_root)}).sheets is None, "不给就按盘上配置"
+    assert RunOptions.from_payload({"root": str(tmp_root), "sheets": False}).to_dict()["sheets"] is False
+    with pytest.raises(ValueError, match="sheets"):
+        RunOptions.from_payload({"root": str(tmp_root), "sheets": "no"})
     (tmp_root / ".shelf").mkdir()
     (tmp_root / "HiddenShelf").mkdir()
     with pytest.raises(ValueError, match="同时有"):
@@ -179,3 +183,18 @@ def test_runner_migrates_legacy_before_loading_config(tmp_root: Path, home: Path
     assert json.loads((tmp_root / SHELF_DIR / "config.json").read_text(encoding="utf-8"))["move_unrecognized"] is False
     # 网页日志里也有那句提示（与命令行同一句）。
     assert any(e.kind == "step.progress" and "已把 .shelf/ 改名为 HiddenShelf/" in (e.message or "") for e in events)
+
+
+def test_disk_options_persist_to_config(tmp_root: Path, home: Path):
+    """`images_in_work_dir` 与 `sheets` 是盘的设置：网页给了就写进 HiddenShelf/config.json，没给就不动。"""
+    from hidden_shelf.config import ShelfConfig
+    from hidden_shelf.paths import ShelfPaths
+    manager = RunManager(home=home, run_pipeline=fake_pipeline())
+    manager.start(_options(tmp_root, sheets=False, images_in_work_dir=False))
+    assert manager.wait(timeout=10)
+    saved = ShelfConfig.load(ShelfPaths(tmp_root))
+    assert saved.sheets is False and saved.images_in_work_dir is False
+    manager.start(_options(tmp_root))
+    assert manager.wait(timeout=10)
+    saved = ShelfConfig.load(ShelfPaths(tmp_root))
+    assert saved.sheets is False and saved.images_in_work_dir is False, "没给就按盘上配置，不改回默认"

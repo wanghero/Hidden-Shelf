@@ -54,8 +54,9 @@ def play_hint_for(container: str, vcodec: str, acodec: str) -> str:
 
 def process_assets(connection: sqlite3.Connection, paths: ShelfPaths, *,
                    progress: Progress = lambda message: None,
-                   sheet_columns: int = 3, sheet_rows: int = 3, frame_width: int = 480) -> MediaResult:
-    """对库里未消失的视频：补探测、补封面（抽帧）、补九宫格、补海报。"""
+                   sheet_columns: int = 3, sheet_rows: int = 3, frame_width: int = 480,
+                   sheets: bool = True) -> MediaResult:
+    """对库里未消失的视频：补探测、补封面（抽帧）、补九宫格（`sheets=False` 跳过，已有的照常登记）、补海报。"""
     paths.ensure()
     result = MediaResult()
     try:
@@ -112,7 +113,7 @@ def process_assets(connection: sqlite3.Connection, paths: ShelfPaths, *,
                 progress(f"[{index}/{total}] 抽帧封面失败 {row['path']}")
         # 3. 九宫格
         sheet = paths.sheets / f"{_sheet_stem(row)}.jpg"
-        if not fingerprint.current(sheet, source=video):
+        if sheets and not fingerprint.current(sheet, source=video):
             if build_sheet(ffmpeg, video, sheet, duration=duration, columns=sheet_columns,
                            rows=sheet_rows, frame_width=frame_width):
                 fingerprint.remember(sheet, source=video)

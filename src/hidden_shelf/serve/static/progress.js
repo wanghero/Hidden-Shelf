@@ -86,7 +86,9 @@
     drive: '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/>',
     home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
     up: '<polyline points="14 9 9 4 4 9"/><path d="M20 20h-7a4 4 0 0 1-4-4V4"/>',
-    chevron: '<path d="m9 18 6-6-6-6"/>'
+    chevron: '<path d="m9 18 6-6-6-6"/>',
+    sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
+    scroll: '<path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M12 9h4M12 13h4"/>'
   };
   function icon(name) {
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -111,6 +113,13 @@
   var sourcesInfo = null;        // GET /api/sources 的响应
   var sourcesError = null;
   var sourcesTimer = null;
+  /* 三个视图：运行（表单 + 步骤）、设置（盘上选项 + 来源与登录）、日志。用 hash 路由，刷新后停在原页。 */
+  var VIEWS = ['run', 'settings', 'log'];
+  var VIEW_ICONS = { run: 'terminal', settings: 'sliders', log: 'scroll' };
+  function viewFromHash() { var name = (location.hash || '').replace(/^#\/?/, ''); return VIEWS.indexOf(name) === -1 ? 'run' : name; }
+  var view = viewFromHash();
+  /* 表单值与视图无关，存在这里；切页重建 DOM 时从这里回填。images/sheets 是盘的设置，开始时一并发给服务端写进盘上配置。 */
+  var opts = { root: '', move: true, offline: false, dryRun: false, force: false, images: true, sheets: true };
 
   function api(method, path, body) {
     var options = { method: method, headers: { 'X-Shelf-Request': '1' } };
@@ -199,12 +208,13 @@
 
   /* ---------- 动作 ---------- */
   function start() {
-    var root = refs.root.value.trim();
-    if (!root) { showFieldError(t('form.root.required')); refs.root.focus(); return; }
+    var root = (refs.root ? refs.root.value : opts.root).trim();
+    opts.root = root;
+    if (!root) { showFieldError(t('form.root.required')); if (refs.root) refs.root.focus(); return; }
     showFieldError('');
     starting = true;
     update();
-    api('POST', '/api/run', { root: root, move_unrecognized: refs.move.checked, offline: refs.offline.checked, force_scrape: refs.force.checked, dry_run: refs.dryRun.checked, images_in_work_dir: refs.images.checked })
+    api('POST', '/api/run', { root: root, move_unrecognized: opts.move, offline: opts.offline, force_scrape: opts.force, dry_run: opts.dryRun, images_in_work_dir: opts.images, sheets: opts.sheets })
       .then(function (response) {
         starting = false;
         if (response.status === 202) {
@@ -219,7 +229,7 @@
           load();
         } else {
           showFieldError(response.data.error || String(response.status));
-          refs.root.focus();
+          if (refs.root) refs.root.focus();
         }
         update();
       })
@@ -232,13 +242,14 @@
     }).catch(function (error) { toast('danger', t('toast.request.failed', { error: String(error && error.message || error) }), true); });
   }
   function openResult() {
-    var root = state.root || refs.root.value.trim();
+    var root = state.root || (refs.root ? refs.root.value : opts.root).trim();
     api('POST', '/api/open', { root: root }).then(function (response) {
       if (response.ok) toast('success', t('toast.open.ok'));
       else toast('danger', response.data.error || t('toast.open.failed'), true);
     }).catch(function (error) { toast('danger', t('toast.request.failed', { error: String(error && error.message || error) }), true); });
   }
   function showFieldError(text) {
+    if (!refs.rootError) { if (text) toast('danger', text, true); return; }
     refs.rootError.textContent = text;
     refs.rootError.hidden = !text;
     refs.root.classList.toggle('invalid', !!text);
@@ -327,7 +338,8 @@
   }
   function choosePicked() {
     if (state.running || picker.loading || picker.error || !picker.path) return;
-    refs.root.value = picker.path;
+    opts.root = picker.path;
+    if (refs.root) refs.root.value = picker.path;
     refs.root.dispatchEvent(new Event('input', { bubbles: true }));
     writePref('browse.last', picker.path);
     closePicker();
@@ -451,14 +463,22 @@
     app.appendChild(h('button', { class: 'menu-button', 'data-ripple': true, 'aria-label': t('menu.open'), onclick: function () { drawerOpen = true; buildShell(); update(); } }, icon('menu')));
     if (drawerOpen) app.appendChild(h('div', { class: 'overlay', onclick: function () { drawerOpen = false; buildShell(); update(); } }));
     app.appendChild(renderSidebar());
-    var page = h('div', { class: 'page' });
+    var page = h('div', { class: 'page view-' + view });
     refs.headSub = h('p', { class: 'page-sub' });
-    page.appendChild(h('header', { class: 'page-head' }, h('div', null, h('h1', { class: 'page-title', text: t('page.title') }), refs.headSub)));
-    var columns = h('div', { class: 'two-col' });
-    columns.appendChild(h('div', { class: 'stack' }, renderForm(), renderSourcesCard()));
-    columns.appendChild(renderSteps());
-    page.appendChild(columns);
-    page.appendChild(renderLogCard());
+    page.appendChild(h('header', { class: 'page-head' }, h('div', null, h('h1', { class: 'page-title', text: t('nav.' + view) }), refs.headSub)));
+    if (view === 'run') {
+      var columns = h('div', { class: 'two-col' });
+      columns.appendChild(renderForm());
+      columns.appendChild(renderSteps());
+      page.appendChild(columns);
+    } else if (view === 'settings') {
+      var cols = h('div', { class: 'two-col settings-cols' });
+      cols.appendChild(renderOptionsCard());
+      cols.appendChild(renderSourcesCard());
+      page.appendChild(cols);
+    } else {
+      page.appendChild(renderLogCard());
+    }
     refs.toasts = h('div', { class: 'toasts', 'aria-live': 'polite' });
     page.appendChild(refs.toasts);
     app.appendChild(h('main', { class: 'content' }, page));
@@ -473,7 +493,12 @@
     return h('aside', { class: 'sidebar', 'aria-label': t('app.name') },
       h('div', { class: 'brand' }, icon('film'), h('span', { class: 'brand-name', text: t('app.name') }),
         h('button', { class: 'icon-button drawer-close', 'data-ripple': true, 'aria-label': t('menu.close'), onclick: function () { drawerOpen = false; buildShell(); update(); } }, icon('x'))),
-      h('nav', { class: 'nav' }, h('a', { class: 'nav-item active', href: '#', 'data-ripple': true, 'aria-current': 'page', onclick: function (e) { e.preventDefault(); drawerOpen = false; buildShell(); update(); } }, icon('terminal'), h('span', { text: t('nav.run') }))),
+      h('nav', { class: 'nav' }, VIEWS.map(function (name) {
+        var active = name === view;
+        return h('a', { class: 'nav-item' + (active ? ' active' : ''), href: '#/' + name, 'data-ripple': true, 'aria-current': active ? 'page' : null,
+          onclick: function () { drawerOpen = false; } }, icon(VIEW_ICONS[name]), h('span', { class: 'nav-label', text: t('nav.' + name) }),
+          name === 'run' && state.running ? h('span', { class: 'nav-dot running', 'aria-hidden': 'true' }) : null);
+      })),
       h('div', { class: 'sidebar-footer' },
         h('div', { class: 'theme-wrap' },
           h('button', { class: 'footer-button', 'data-ripple': true, 'aria-haspopup': 'menu', 'aria-expanded': themeMenuOpen ? 'true' : 'false', 'aria-label': t('theme.label'),
@@ -492,13 +517,13 @@
     var list = h('datalist', { id: 'recent-roots' });
     refs.recent = list;
     refs.root = h('input', { class: 'input mono', id: 'root', type: 'text', list: 'recent-roots', placeholder: t('form.root.placeholder'), autocomplete: 'off', spellcheck: 'false',
-      value: refs.rootValue || state.root || recentRoots[0] || '', onkeydown: function (e) { if (e.key === 'Enter' && !state.running) { e.preventDefault(); start(); } }, oninput: function () { refs.rootValue = refs.root.value; showFieldError(''); } });
+      value: opts.root || state.root || recentRoots[0] || '', onkeydown: function (e) { if (e.key === 'Enter' && !state.running) { e.preventDefault(); start(); } }, oninput: function () { opts.root = refs.root.value; showFieldError(''); } });
     refs.rootError = h('p', { class: 'field-error', hidden: true, role: 'alert' });
     refs.browseButton = h('button', { class: 'icon-button bordered', type: 'button', 'data-ripple': true, 'aria-label': t('browse.open'), title: t('browse.open'), 'aria-haspopup': 'dialog',
       onclick: function () { openPicker(refs.browseButton); } }, icon('folder'));
-    function toggle(key, labelKey, checked) {
-      var input = h('input', { type: 'checkbox' });
-      input.checked = checked;
+    function toggle(key, labelKey) {
+      var input = h('input', { type: 'checkbox', onchange: function () { opts[key] = input.checked; } });
+      input.checked = !!opts[key];
       refs[key] = input;
       return h('label', { class: 'switch', 'data-ripple': true }, input, h('span', { class: 'track', 'aria-hidden': 'true' }), h('span', { text: t(labelKey) }));
     }
@@ -509,12 +534,30 @@
       h('div', { class: 'card-head' }, h('div', null, h('h2', { class: 'card-title', text: t('form.title') }), h('p', { class: 'card-sub', text: t('form.sub') }))),
       h('div', { class: 'field' }, h('label', { class: 'label', for: 'root', text: t('form.root') }), h('div', { class: 'input-row' }, refs.root, refs.browseButton), list, refs.rootError, h('p', { class: 'help', text: t('form.root.help') })),
       h('div', { class: 'switches' },
-        toggle('move', 'form.move', refs.moveValue == null ? true : refs.moveValue),
-        toggle('offline', 'form.offline', !!refs.offlineValue),
-        toggle('dryRun', 'form.dry_run', !!refs.dryRunValue),
-        toggle('force', 'form.force', !!refs.forceValue),
-        toggle('images', 'form.images', refs.imagesValue == null ? true : refs.imagesValue)),
+        toggle('move', 'form.move'),
+        toggle('offline', 'form.offline'),
+        toggle('dryRun', 'form.dry_run'),
+        toggle('force', 'form.force')),
+      h('p', { class: 'help', text: t('form.settings.hint') }),
       h('div', { class: 'form-actions' }, refs.startButton, refs.openButton, refs.formNote));
+  }
+
+  /* 设置页左卡：盘上选项。它们写进盘的 HiddenShelf/config.json，点「开始」时随本次运行一起发过去。 */
+  function renderOptionsCard() {
+    function toggle(key, labelKey, helpKey) {
+      var input = h('input', { type: 'checkbox', onchange: function () { opts[key] = input.checked; } });
+      input.checked = !!opts[key];
+      refs[key] = input;
+      return h('label', { class: 'switch', 'data-ripple': true }, input, h('span', { class: 'track', 'aria-hidden': 'true' }),
+        h('span', { class: 'switch-text' }, h('span', { text: t(labelKey) }), helpKey ? h('span', { class: 'switch-help', text: t(helpKey) }) : null));
+    }
+    refs.optionsNote = h('p', { class: 'help mono-path' });
+    return h('section', { class: 'card' },
+      h('div', { class: 'card-head' }, h('div', null, h('h2', { class: 'card-title', text: t('options.title') }), h('p', { class: 'card-sub', text: t('options.sub') }))),
+      h('div', { class: 'switches' },
+        toggle('sheets', 'options.sheets', 'options.sheets.help'),
+        toggle('images', 'form.images', 'options.images.help')),
+      refs.optionsNote);
   }
 
   /* ---------- 来源与登录 ---------- */
@@ -692,20 +735,30 @@
   }
 
   function update() {
-    if (!refs.root) return;
+    if (!refs.headSub) return;
     // 页头状态
     var headKey = state.running ? 'page.running' : !state.result ? 'page.idle' : state.result.cancelled ? 'page.cancelled' : state.result.ok ? (state.result.dry_run ? 'page.dry_run' : 'page.done') : 'page.failed';
     var headDot = state.running ? 'running' : !state.result ? '' : state.result.cancelled ? 'skipped' : state.result.ok ? 'done' : 'failed';
     clear(refs.headSub);
     refs.headSub.appendChild(h('span', { class: 'dot ' + headDot, 'aria-hidden': 'true' }));
     refs.headSub.appendChild(h('span', { text: t(headKey) + (state.root ? ' · ' + state.root : '') }));
+    var busy = state.running || starting;
+    if (!opts.root) opts.root = state.root || recentRoots[0] || '';
+    ['move', 'offline', 'dryRun', 'force', 'images', 'sheets'].forEach(function (key) { if (refs[key]) refs[key].disabled = busy; });
+    if (refs.optionsNote) refs.optionsNote.textContent = opts.root ? t('options.note', { path: opts.root }) : t('options.note.empty');
+    var runNav = document.querySelector('.nav-item[href="#/run"] .nav-dot');
+    if (!!runNav !== !!state.running) { var nav = document.querySelector('.nav'); if (nav) { var item = nav.querySelector('.nav-item[href="#/run"]'); if (item) { if (runNav) item.removeChild(runNav); else item.appendChild(h('span', { class: 'nav-dot running', 'aria-hidden': 'true' })); } } }
+    if (refs.root) updateForm(busy);
+    if (refs.steps) updateSteps();
+    if (refs.log) updateLog();
+  }
+
+  function updateForm(busy) {
     // 表单：刷新页面后把正在跑／上次跑的盘根目录填回去（用户自己改过的不动）。
     clear(refs.recent);
     recentRoots.forEach(function (root) { refs.recent.appendChild(h('option', { value: root })); });
-    if (!refs.rootValue && !refs.root.value) refs.root.value = state.root || recentRoots[0] || '';
-    var busy = state.running || starting;
-    [refs.root, refs.move, refs.offline, refs.dryRun, refs.force, refs.images].forEach(function (input) { input.disabled = busy; });
-    refs.moveValue = refs.move.checked; refs.offlineValue = refs.offline.checked; refs.forceValue = refs.force.checked; refs.dryRunValue = refs.dryRun.checked; refs.imagesValue = refs.images.checked;
+    if (!refs.root.value) refs.root.value = opts.root;
+    refs.root.disabled = busy;
     clear(refs.startButton);
     refs.startButton.className = 'button large' + (state.running ? ' secondary' : '');
     refs.startButton.setAttribute('aria-busy', starting ? 'true' : 'false');
@@ -717,7 +770,9 @@
     var finishedOk = !state.running && state.result && state.result.ok && state.steps.build && state.steps.build.status === 'done';
     refs.openButton.hidden = !finishedOk;
     updatePickerButtons();
-    // 步骤
+  }
+
+  function updateSteps() {
     STEPS.forEach(function (name) {
       var row = refs.steps[name];
       var data = state.steps[name];
@@ -747,7 +802,9 @@
       refs.resultBox.appendChild(h('p', { class: 'result-text' + (result.ok ? '' : ' failed'), text: text }));
       if (result.log_path) refs.resultBox.appendChild(h('div', { class: 'result-path', text: t('result.log', { path: result.log_path }) }));
     }
-    // 日志三态
+  }
+
+  function updateLog() {
     clear(refs.logState);
     var lines = core.filterLog(events, logFilter).length;
     refs.logCount.textContent = t('log.lines', { n: lines });
@@ -774,7 +831,8 @@
   update();
   load();
   loadSources();
-  setInterval(function () { if (state.running && refs.root) update(); }, 1000);
+  setInterval(function () { if (state.running && refs.headSub) update(); }, 1000);
+  window.addEventListener('hashchange', function () { var next = viewFromHash(); if (next !== view) { view = next; themeMenuOpen = false; buildShell(); update(); } });
   document.addEventListener('click', function () { if (themeMenuOpen) { themeMenuOpen = false; buildShell(); update(); } });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;

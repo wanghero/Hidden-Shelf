@@ -185,6 +185,21 @@ def test_corrupt_file_does_not_raise(tmp_root: Path):
     connection.close()
 
 
+def test_process_assets_sheets_off_skips_only_sheets(disk):
+    """九宫格开关（用户 2026-10-30 要的）：关掉只跳过九宫格，探测、抽帧封面、海报照做；已有的九宫格照常登记。"""
+    root, paths, connection = disk
+    result = process_assets(connection, paths, frame_width=64, sheets=False)
+    assert result.sheets == 0 and result.probed == 3 and result.frame_covers == 2 and result.posters == 2
+    assert not list(paths.sheets.glob("*.jpg"))
+    assert connection.execute("SELECT count(*) FROM asset WHERE sheet_file IS NOT NULL").fetchone()[0] == 0
+    later = process_assets(connection, paths, frame_width=64)
+    assert later.sheets == 3
+    assert connection.execute("SELECT count(*) FROM asset WHERE sheet_file IS NOT NULL").fetchone()[0] == 3
+    again = process_assets(connection, paths, frame_width=64, sheets=False)
+    assert again.sheets == 0
+    assert connection.execute("SELECT count(*) FROM asset WHERE sheet_file IS NOT NULL").fetchone()[0] == 3, "已有的不删"
+
+
 def test_process_assets_is_idempotent(disk):
     root, paths, connection = disk
     process_assets(connection, paths, frame_width=64)
