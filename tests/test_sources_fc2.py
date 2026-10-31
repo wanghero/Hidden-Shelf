@@ -253,9 +253,9 @@ def test_javarchive_records_skip_404_entries():
     assert first.cover_urls == (PICS + "4137487pl.jpg", PICS + "4137487ps.jpg")
 
 
-def test_all_eight_sites_are_registered_and_tables_agree():
+def test_all_nine_sites_are_registered_and_tables_agree():
     assert set(SITE_SOURCES) == set(SOURCE_SPECS) == set(SOURCES) == {
-        "r18dev", "dmm", "1pondo", "fc2", "javarchive", "javdb", "javbus", "avbase"}
+        "r18dev", "dmm", "1pondo", "tokyohot", "fc2", "javarchive", "javdb", "javbus", "avbase"}
     for name, cls in SITE_SOURCES.items():
         config = cls.DEFAULT
         assert config.name == name

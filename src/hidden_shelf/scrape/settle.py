@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -22,7 +24,7 @@ from .policy import FALLBACK_SOURCES, FIELDS, blacklisted, chain_rank
 from .sources.base import SiteRecord
 
 #: 直接落到 `asset` 标量列的字段。
-SCALAR_FIELDS = ("title", "original_title", "studio", "series", "release_date")
+SCALAR_FIELDS = ("title", "original_title", "studio", "series", "release_date", "plot")
 #: 整组取胜出那一家的字段。
 LIST_FIELDS = ("tags", "performers")
 #: 不结算、原样带给封面那一步的字段。
@@ -43,6 +45,13 @@ class Settled:
     source: str
     #: 被压下去的 `(值, 来源)`，按链上的先后。
     overruled: tuple[tuple[Any, str], ...] = field(default_factory=tuple)
+
+
+def normalized_plot(raw: object) -> str:
+    """来源给的简介 → 段落用一个空行分开、行内空白折成一个空格的文本。"""
+    lines = [" ".join(line.split()) for line in str(raw or "").replace("\r", "").split("\n")]
+    text = "\n".join(lines).strip()
+    return re.sub(r"\n{3,}", "\n\n", text)
 
 
 def normalized_release_date(raw: object) -> str:
@@ -85,6 +94,10 @@ def extract(record: SiteRecord | Mapping[str, Any], *, source: str | None = None
     scalar("studio", canonical_studio(payload.get("maker") or payload.get("studio")))
     scalar("series", payload.get("series"))
     scalar("release_date", normalized_release_date(payload.get("release_date")))
+    # 简介保留段落：只折行内空白，不把整段压成一行。老快照里 dmm/fc2/1pondo 的 `description` 也算。
+    plot = normalized_plot(payload.get("plot") or payload.get("description"))
+    if plot:
+        found.append(Candidate("plot", plot, name, confidence))
     genres = payload.get("genres")
     if isinstance(genres, (list, tuple)):
         tags = tuple(dict.fromkeys(" ".join(str(tag).split()) for tag in genres if str(tag).strip()))

@@ -235,6 +235,8 @@ class SiteRecord:
     #: `None` 表示这一站不给标签；空元组表示给了但为空。
     tags: tuple[str, ...] | None = None
     cover_urls: tuple[str, ...] = ()
+    #: 整段简介，段落之间空一行。站上没有就留空。
+    plot: str = ""
     confidence: float = 1.0
     #: 只有这一站才有的键，原样并进 `payload()`。
     extra: Mapping[str, Any] = field(default_factory=dict)
@@ -251,6 +253,8 @@ class SiteRecord:
             maker=self.studio, label=self.label, series=self.series, director=self.director,
             release_date=self.release_date, runtime=self.runtime,
             cover_urls=list(self.cover_urls), cover_url=self.cover_url)
+        if self.plot:
+            payload["plot"] = self.plot
         if self.tags is not None:
             payload["genres"] = list(self.tags)
         payload.update(self.extra)

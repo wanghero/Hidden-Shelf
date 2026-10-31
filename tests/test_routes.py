@@ -73,7 +73,7 @@ def test_members_are_sources_we_have_a_parser_for():
     for content, chain in ROUTES.items():
         for source in chain:
             assert source in SOURCE_SPECS, (content, source)
-    assert set(SOURCE_SPECS) == {"r18dev", "dmm", "1pondo", "fc2", "javarchive", "avbase", "javbus", "javdb"}
+    assert set(SOURCE_SPECS) == {"r18dev", "dmm", "1pondo", "tokyohot", "fc2", "javarchive", "avbase", "javbus", "javdb"}
 
 
 def test_censored_asks_the_mirror_then_dmm_then_the_indexes_with_javdb_last():
@@ -99,9 +99,11 @@ def test_dmm_is_only_on_the_censored_chain():
 
 
 def test_uncensored_never_asks_r18dev():
-    for code in ("040221-001", "HEYZO-1380", "n0780"):
+    for code in ("040221-001", "HEYZO-1380"):
         assert "r18dev" not in route_for_code(code)
         assert route_for_code(code) == ("avbase", "javbus", "javdb")
+    # 东京热形状的番号多问一家官网，仍不问 r18dev
+    assert route_for_code("n0780") == ("tokyohot", "avbase", "javbus", "javdb")
 
 
 def test_a_dated_code_only_asks_1pondo_when_this_file_says_so():

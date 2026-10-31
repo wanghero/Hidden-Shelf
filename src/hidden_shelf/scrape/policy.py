@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 POLICY_VERSION = "hidden-shelf-source-policy-v1"
-FIELDS = ("title", "original_title", "performers", "studio", "series", "release_date", "tags")
+FIELDS = ("title", "original_title", "performers", "studio", "series", "release_date", "tags", "plot")
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,8 @@ SOURCE_SPECS = {
         "fc2": "official",
         # 一本道的官网作品 JSON，发行方自己那一份。
         "1pondo": "official",
+        # 东京热官网作品页，发行方自己那一份；只对这家形状的番号（n####/k####/red-###）问。
+        "tokyohot": "official",
         # 几个存档站也没有的下架 FC2 的最后一档：转载站，标题由发布者写，封面是转存件。
         "javarchive": "community",
         # 自写解析器的社区站。
@@ -70,13 +72,15 @@ FIELD_SOURCE_BLACKLIST: dict[str, frozenset[str]] = {}
 #: `release_date`：r18dev 排在 fc2 之后、javdb 之前（它给的发行日与 DMM 同源，但有码链已有 dmm 在前）。
 #: `tags`：dmm 的 genre 与 r18dev 是同一套词，r18dev 垫后；有码作品的标签另由 `preferred_tag_source` 提 javdb 到链首。
 FIELD_SOURCE_ORDER = {
-    "title": ("dmm", "r18dev", "1pondo", "fc2", "javdb", "avbase", "javbus", "javarchive"),
-    "original_title": ("dmm", "r18dev", "1pondo", "fc2", "javdb", "avbase", "javbus", "javarchive"),
-    "performers": ("dmm", "r18dev", "1pondo", "fc2", "javdb", "avbase", "javbus", "javarchive"),
-    "studio": ("dmm", "r18dev", "1pondo", "fc2", "javdb", "avbase", "javbus", "javarchive"),
-    "series": ("dmm", "r18dev", "1pondo", "fc2", "javdb", "avbase", "javbus", "javarchive"),
-    "release_date": ("dmm", "1pondo", "fc2", "r18dev", "javdb", "avbase", "javbus", "javarchive"),
-    "tags": ("dmm", "1pondo", "fc2", "r18dev", "javdb", "avbase", "javbus", "javarchive"),
+    "title": ("dmm", "r18dev", "1pondo", "tokyohot", "fc2", "javdb", "avbase", "javbus", "javarchive"),
+    "original_title": ("dmm", "r18dev", "1pondo", "tokyohot", "fc2", "javdb", "avbase", "javbus", "javarchive"),
+    "performers": ("dmm", "r18dev", "1pondo", "tokyohot", "fc2", "javdb", "avbase", "javbus", "javarchive"),
+    "studio": ("dmm", "r18dev", "1pondo", "tokyohot", "fc2", "javdb", "avbase", "javbus", "javarchive"),
+    "series": ("dmm", "r18dev", "1pondo", "tokyohot", "fc2", "javdb", "avbase", "javbus", "javarchive"),
+    "release_date": ("dmm", "1pondo", "tokyohot", "fc2", "r18dev", "javdb", "avbase", "javbus", "javarchive"),
+    "tags": ("dmm", "1pondo", "tokyohot", "fc2", "r18dev", "javdb", "avbase", "javbus", "javarchive"),
+    # 简介：只有官方站给整段文字；社区站不给，排上只为分级完整。
+    "plot": ("dmm", "1pondo", "tokyohot", "fc2", "r18dev", "javdb", "avbase", "javbus", "javarchive"),
 }
 
 

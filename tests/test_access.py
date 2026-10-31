@@ -38,7 +38,7 @@ def test_source_for_matches_domains():
     assert source_for("https://api.video.dmm.co.jp/graphql") == "dmm"
     assert source_for("https://img.javstore.net/x.jpg") == "javarchive"
     assert source_for("https://example.com/") is None
-    assert set(SOURCES) == {"r18dev", "dmm", "1pondo", "fc2", "javarchive", "javdb", "javbus", "avbase"}
+    assert set(SOURCES) == {"r18dev", "dmm", "1pondo", "tokyohot", "fc2", "javarchive", "javdb", "javbus", "avbase"}
 
 
 def test_cooldown_blocked_doubles_to_cap(tmp_path: Path):

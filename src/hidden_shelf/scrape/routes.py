@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from typing import Iterable, Mapping, Sequence
 
-from ..rules.codes import is_amateur_code, is_korean_mib_code, is_uncensored_code
+from ..rules.codes import is_amateur_code, is_korean_mib_code, is_uncensored_code, tokyo_hot_code
 from .policy import SOURCE_SPECS
 
 #: 内容类型。`unknown` 是「番号认不出来」，不是一种内容；`other` 是认得出、但没接来源的体系
@@ -60,7 +60,8 @@ ROUTES: dict[str, tuple[str, ...]] = {
     # 无码：发行方自己那份作品 JSON 先问，但只在本机证据指着一本道时才问（见 `route_for_code`）——
     # 日期式番号不带片商，カリビアンコム 与一本道同形，问错一家答回来的是同一天发行的另一部片。
     # **不含 r18dev**：无码番号在 r18.dev 上没有。peach 的 avsox 经 amane 桥，本项目不接。
-    "uncensored": ("1pondo", "avbase", "javbus", "javdb"),
+    # 东京热官网同理，只对这家形状的番号（`n####`、`k####`、`red-###`）问；它给整段简介与 3762 宽的封套。
+    "uncensored": ("1pondo", "tokyohot", "avbase", "javbus", "javdb"),
     # FC2：发行方商品页 → 下架作品的转载站 JavArchive → javdb。peach 中间还有 fc2cmadb、fc2ppvdb、javten
     # 三个要本机浏览器过 Cloudflare 的存档站，本项目不接。
     # 不含 r18dev（peach 实测 85 条全空）、不含 AVBase 与 JavBus（对 FC2 番号一份都没给过）。
@@ -75,12 +76,12 @@ ROUTES: dict[str, tuple[str, ...]] = {
 }
 
 #: 发行方与专站那一档。javarchive 按来源分级是 community，但在链上属于这一档：它只收 FC2，不是综合索引。
-OFFICIAL_STAGE = ("r18dev", "dmm", "1pondo", "fc2", "javarchive")
+OFFICIAL_STAGE = ("r18dev", "dmm", "1pondo", "tokyohot", "fc2", "javarchive")
 #: 综合索引那几家。本项目里它们各是一档，逐家短路；列出来只为 `official_route` 等处分类。
 COMMUNITY_SOURCES = ("avbase", "javbus", "javdb")
 #: 缺标签的行在这几档之间多问一家，见 `settles`。dmm 不在这里：它与 r18.dev 是同一份目录，
 #: r18.dev 答了标量却没给标签时再问 DMM 拿回的还是那一套 genre；它只在 r18.dev 落空时被问。
-OFFICIAL_STAGE_NAMES = ("r18dev", "1pondo", "fc2")
+OFFICIAL_STAGE_NAMES = ("r18dev", "1pondo", "tokyohot", "fc2")
 
 #: 必填标量字段。一站把这几项（在这一行还缺的范围内）都给全了就不问下一站。
 SCALAR_FIELDS = ("title", "performers", "studio", "release_date")
@@ -181,13 +182,15 @@ def route_for_code(code: str | None, *hints: str | None,
     """这个番号的来源链，已按本机证据裁过。
 
     无码那条链上的 `1pondo` 要证据：日期式番号本身不带片商，只有路径、文件名或库里厂牌
-    指着一本道时才问它，问不着的照旧落到综合索引。
+    指着一本道时才问它，问不着的照旧落到综合索引。`tokyohot` 只问东京热形状的番号。
     """
     chain = route(classify(code, *hints), overrides=overrides)
     if "1pondo" in chain:
         from .sources.onepondo import movie_id, names_this_studio
         if not (movie_id(str(code or "")) and names_this_studio(*hints)):
             chain = tuple(source for source in chain if source != "1pondo")
+    if "tokyohot" in chain and not tokyo_hot_code(str(code or "")):
+        chain = tuple(source for source in chain if source != "tokyohot")
     return chain
 
 

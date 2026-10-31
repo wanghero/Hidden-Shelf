@@ -123,7 +123,7 @@ If you would rather not copy cookies by hand, sign in through a browser: install
 uv run shelf login javdb      # a browser opens; sign in, then close the window or press Enter. Same for javbus
 ```
 
-The "Sources & sign-in" panel in `shelf serve` does the same, with a per-site switch and a one-click "clear pause" for sites in cooldown. AVBase needs no sign-in: its Cloudflare check looks at the TLS fingerprint, so install `curl_cffi` (`uv sync --extra fingerprint`) and it passes; the panel shows whether it is installed. Cookies and the browser's User-Agent live only in the local global config, never on the disk, in logs or in snapshots.- `routes`: replaces the whole source chain for a content type. Types are `censored | amateur | uncensored | fc2`; sources are `r18dev dmm 1pondo fc2 javarchive avbase javbus javdb`. Each site is its own tier and the chain short-circuits: the first site that answers wins.
+The "Sources & sign-in" panel in `shelf serve` does the same, with a per-site switch and a one-click "clear pause" for sites in cooldown. AVBase needs no sign-in: its Cloudflare check looks at the TLS fingerprint, so install `curl_cffi` (`uv sync --extra fingerprint`) and it passes; the panel shows whether it is installed. Cookies and the browser's User-Agent live only in the local global config, never on the disk, in logs or in snapshots.- `routes`: replaces the whole source chain for a content type. Types are `censored | amateur | uncensored | fc2`; sources are `r18dev dmm 1pondo tokyohot fc2 javarchive avbase javbus javdb`. Each site is its own tier and the chain short-circuits: the first site that answers wins.
 
 Snapshots (`<code>-<source>.json`) and cooldowns (`_cooldown.json`) live in `<disk root>/HiddenShelf/sources/`; a code is not asked again within 7 days. A 403 pauses the site for 15 minutes, doubling on repeat; a 429 honors the site's Retry-After.
 
@@ -134,13 +134,16 @@ Snapshots (`<code>-<source>.json`) and cooldowns (`_cooldown.json`) live in `<di
 | r18dev | censored | no | works directly |
 | dmm | censored | no | answered "no such code" for `ABW-358` |
 | 1pondo | uncensored (1pondo) | no | not tested |
+| tokyohot | uncensored (Tokyo-Hot: `n####`, `k####`, `red-###`) | no | works directly (2026-10-30); gives the full plot and a 3762 px jacket; delisted old titles return "not found" |
 | fc2 | FC2 | no | works directly |
 | javarchive | FC2 (delisted reposts) | no | works directly |
 | javdb | censored, amateur, uncensored, FC2 | yes | works directly |
 | javbus | censored, amateur, uncensored | yes (age gate) | works directly |
 | avbase | censored, amateur, uncensored | no (but Cloudflare) | 403, went into cooldown; needs a browser cookie |
 
-Default chains: censored `r18dev → dmm → avbase → javbus → javdb`; amateur `avbase → javbus → javdb → r18dev`; uncensored `1pondo → avbase → javbus → javdb`; FC2 `fc2 → javarchive → javdb`. When sources disagree, a local NFO ranks highest, then official sites, then community sites; whatever you write in `overrides.json` is never overwritten.
+Default chains: censored `r18dev → dmm → avbase → javbus → javdb`; amateur `avbase → javbus → javdb → r18dev`; uncensored `1pondo → tokyohot → avbase → javbus → javdb` (1pondo only with local evidence, tokyohot only for Tokyo-Hot shaped codes); FC2 `fc2 → javarchive → javdb`. When sources disagree, a local NFO ranks highest, then official sites, then community sites; whatever you write in `overrides.json` is never overwritten.
+
+Official sites (dmm, 1pondo, tokyohot, fc2) also provide the plot; it is stored in `plot` and shown on the work page. A plot is a bonus, not a reason to ask again: for works scraped before 1.4.9, run once with "force re-scrape" and fresh snapshots are reused, so only the new source hits the network.
 
 ## Layout on the disk
 

@@ -27,6 +27,8 @@ SOURCES: dict[str, dict] = {
     "r18dev": {"label": "R18.dev", "domains": ("r18.dev",), "login": "https://r18.dev/"},
     "dmm": {"label": "DMM / FANZA", "domains": ("dmm.co.jp", "dmm.com"), "login": "https://www.dmm.co.jp/"},
     "1pondo": {"label": "一本道", "domains": ("1pondo.tv",), "login": "https://www.1pondo.tv/"},
+    # 东京热官网与图床 `my.cdn.tokyo-hot.com`。免登录可读，没有 Cloudflare 验证（2026-10-30 实测）。
+    "tokyohot": {"label": "Tokyo-Hot", "domains": ("tokyo-hot.com",), "login": "https://my.tokyo-hot.com/"},
     # FC2 的商品页、卖家页和图片存储（`storage*`、`contents-thumbnail*`）都在 fc2.com 底下。免登录可读。
     "fc2": {"label": "FC2", "domains": ("fc2.com",), "login": "https://adult.contents.fc2.com/"},
     # 下架 FC2 的最后一档。作品页在 javarchive.com、封面转存在 javstore.net 上，两边算同一个来源。

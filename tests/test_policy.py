@@ -59,7 +59,7 @@ def test_field_order_covers_every_field_with_registered_sources_only():
 
 def test_field_rank_counts_from_one_and_puts_unknown_sources_last():
     assert field_rank("tags", "dmm") == 1
-    assert field_rank("tags", "r18dev") == 4
+    assert field_rank("tags", "r18dev") == 5
     assert field_rank("tags", "imaginary") == len(FIELD_SOURCE_ORDER["tags"]) + 1
     assert field_rank("tags", "javdb", code="ABW-220") == 0
     assert field_rank("tags", LOCAL_NFO_SOURCE, code="ABW-220") == -1
