@@ -15,7 +15,7 @@
 - **先做计划 6**（`2026-10-29-plan-6-visible-data-dir.md`，资料目录 `.shelf/` 改为可见的 `HiddenShelf/`），再做本计划。本计划里的 `HiddenShelf/` 就是改名后的资料目录（原 `.shelf/`），代码里用 `paths.SHELF_DIR`。每个任务提交 +0.0.1（`pyproject.toml`、`src/hidden_shelf/__init__.py`、`tests/test_smoke.py` 三处同改），接着计划 6 的最后一个版本号往上数，最后一个任务升到 **0.4.0**。提交信息中文。
 - 测试永不联网（`tests/conftest.py` 的 `isolated_home`）；CI 里也不许联网。
 - 预演的承诺要能被测试钉住：**`HiddenShelf/` 之外一个字节都不改**（扫描、导入、刮削照常写 `HiddenShelf/`，这是算出计划的前提，文档里要如实写）。
-- 文档里不出现作者本机的私有路径（`~/Claude-Code/...`、`~/.claude/...`、`/Volumes/Seagate-8T/...`）。截图已由本机准备好：`docs/images/wall.jpg`（海报墙）、`docs/images/progress.jpg`（进度网页）、`docs/images/picker.jpg`（目录选择器），都来自演示数据，直接引用，不要重新生成。
+- 文档里不出现作者本机的私有路径（`~/Claude-Code/...`、`~/.claude/...`、`/Volumes/<本机盘名>/...`）。截图已由本机准备好：`docs/images/wall.jpg`（海报墙）、`docs/images/progress.jpg`（进度网页）、`docs/images/picker.jpg`（目录选择器），都来自演示数据，直接引用，不要重新生成。
 - 刮削来源在作者本机 2026-10-29 的真实冒烟结果（写进 README「来源」一节，不要编别的）：r18dev、javbus、javdb、fc2、javarchive 直连可用；dmm 对 `ABW-358` 回「没有这个番号」；avbase 回 403 进冷却（需要浏览器 Cookie）。
 - `i18n.js` 两套 key 必须一致（`tests/test_serve_app.py::test_i18n_dictionaries_have_same_keys`）；`progress.css` 只用 token（`test_progress_css_uses_only_tokens`）。
 - 不加载外网资源的约束不变；README 里的 CI 徽章是图片外链，只在 README 里，不进站点。
@@ -373,7 +373,7 @@ git commit -m "ci: GitHub Actions 三平台跑 pytest 与前端测试"
 
 - [ ] **Step 3: 检查**
 
-Run: `grep -nE '~/Claude-Code|~/\.claude|/Volumes/Seagate|wanghero/[^H]' README.md README.en.md`
+Run: `grep -nE '~/Claude-Code|~/\.claude|/Volumes/<本机盘名>|wanghero/[^H]' README.md README.en.md`
 Expected: 无输出（仓库 URL `wanghero/Hidden-Shelf` 允许）。再 `uv run pytest tests/test_smoke.py -q` 过。
 
 - [ ] **Step 4: 版本 0.3.17，提交**
