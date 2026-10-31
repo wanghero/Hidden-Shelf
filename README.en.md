@@ -1,6 +1,6 @@
 # Hidden Shelf
 
-A local organizer for JAV-style video collections: recognizes product codes, scrapes metadata, files everything under `studio/code/`, and writes a fully static site at the disk root. Plug in the drive, double-click `index.html`, browse and play.
+**Turns a hard drive full of videos into a self-describing collection.** It recognizes product codes, scrapes metadata, files everything under `studio/code/`, then writes a fully static, offline browsing site at the disk root. Every derived file lives under `HiddenShelf/` and is referenced by relative path, so after you copy the whole drive, move it to another computer, switch operating systems or restore it from a cold backup, double-clicking `index.html` still browses and plays. Nothing to install on the viewing machine.
 
 ![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg) · [中文](README.md)
 
@@ -9,6 +9,18 @@ A local organizer for JAV-style video collections: recognizes product codes, scr
 | ![Poster wall](docs/images/wall.jpg) | ![Progress page](docs/images/progress.jpg) | ![Folder picker](docs/images/picker.jpg) |
 
 All screenshots use demo data.
+
+## Core idea: the disk is the truth, the site travels with it
+
+Most media library software keeps its knowledge in its own database: move the drive to another machine and you start over; stop using the software and all that is left is a pile of renamed files. Hidden Shelf does the opposite:
+
+- **The disk is the single source of truth.** Once files are filed under `studio/code/`, titles, performers, tags, covers, contact sheets and the index are all written to `HiddenShelf/` at the disk root as plain files. Nothing depends on the state of the machine that ran it.
+- **The site is purely static.** `index.html`, its data, images and videos use relative paths only. It opens from `file://` with no server, no database service, no network and no runtime. A phone, a TV box, a friend's laptop: anything with a browser can browse it.
+- **The whole thing is portable.** Copy or move the root directory to another drive, machine or operating system and the site keeps working without a rebuild. A cold backup of the drive is a complete collection with its own catalog.
+- **Organizing is repeatable.** After you move or rename files inside the collection, run `shelf run` again: it continues from the data it already has, never re-scrapes what it knows and never overwrites fields you edited by hand.
+- **The program can disappear.** If you stop using Hidden Shelf one day, what remains on the disk is a tidy directory tree, an open-format `shelf.db` (SQLite), JPEGs and a web page that opens. No proprietary format.
+
+In one sentence: organize once, and the catalog goes wherever the drive goes.
 
 ## What it does to your disk
 
