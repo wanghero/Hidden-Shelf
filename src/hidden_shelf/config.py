@@ -8,13 +8,21 @@ from dataclasses import asdict, dataclass, field, fields
 from .paths import ShelfPaths
 from .rules.codes import compile_code_patterns
 
+#: 默认目录模板。`[ {title}]`、`[-{actors}]` 是可选分组，取不到值整段省略。
+DIR_TEMPLATE = "{studio}/{code}[ {title}][-{actors}]"
+#: 1.4.11 及之前的默认目录模板。老盘的 `config.json` 里原样存着这一串就说明用户没改过模板，
+#: 读的时候升到新默认值；真想只要番号的，把模板显式写成别的（例如 `{studio}/{code}[ CD{cd}]`）。
+LEGACY_DIR_TEMPLATE = "{studio}/{code}"
+
 
 @dataclass
 class ShelfConfig:
     #: 认不出番号的视频是否集中搬到 `未识别/`（保留原目录层级）。
     move_unrecognized: bool = True
     #: 归位目录模板（相对盘根）。厂牌缺失时落 `unknown_studio_dir/{code}`。
-    dir_template: str = "{studio}/{code}"
+    #: 用户 2026-11-01 定：目录名带上标题与出演者（`N0900 東熱鬼畜で人生初中出し-松下栞`）。
+    #: 标题或出演者缺着的作品，那一段整段不出现，于是退回 `N0900`。
+    dir_template: str = DIR_TEMPLATE
     #: 归位文件名模板（不含扩展名）。
     file_template: str = "{code}[-cd{cd}]"
     unknown_studio_dir: str = "_未知厂牌"
@@ -49,7 +57,10 @@ class ShelfConfig:
             if item.type in ("bool", bool):
                 setattr(config, item.name, bool(value))
             elif item.type in ("str", str):
-                setattr(config, item.name, str(value))
+                text = str(value)
+                if item.name == "dir_template" and text == LEGACY_DIR_TEMPLATE:
+                    text = DIR_TEMPLATE
+                setattr(config, item.name, text)
             elif item.name == "code_patterns":
                 if isinstance(value, list):
                     config.code_patterns = [str(rule) for rule in value if str(rule or "").strip()]

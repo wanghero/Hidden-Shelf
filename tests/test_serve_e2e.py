@@ -105,7 +105,7 @@ def test_serve_runs_a_real_disk_and_matches_cli_output(tmp_path: Path, fake_vide
     assert other_cli == other_web == ["跳过刮削（--offline）"]
     assert result["ok"] is True and result["cancelled"] is False and result["failed_step"] == ""
     assert result["index_html"] == str(web_root / "index.html") and (web_root / "index.html").is_file()
-    assert (web_root / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
+    assert (web_root / "Prestige" / "ABP-758 标题-甲" / "ABP-758.mp4").is_file()
     assert set(result["steps"]) == set(pipeline.STEPS)
     # 打开成品：index.html 在了就 200。
     manager = RunManager(home=tmp_path / "home")

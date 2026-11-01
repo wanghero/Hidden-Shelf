@@ -56,14 +56,14 @@ def test_apply_moves_and_updates_db(disk):
     plan = build_plan(connection, paths, ShelfConfig())
     result = apply_plan(connection, paths, plan)
     assert result.moved == 4 and result.failed == 0 and result.skipped == 0
-    assert (root / "Prestige" / "ABP-758" / "ABP-758.mp4").read_bytes() == b"video-a"
+    assert (root / "Prestige" / "ABP-758 甲" / "ABP-758.mp4").read_bytes() == b"video-a"
     assert (root / "_未知厂牌" / "259LUXU-1475" / "259LUXU-1475-cd1.mp4").read_bytes() == b"cd1"
     assert (root / "_未知厂牌" / "259LUXU-1475" / "259LUXU-1475-cd2.mp4").read_bytes() == b"cd2"
     assert (root / "未识别" / "c" / "deep" / "随手拍.mp4").read_bytes() == b"home"
     assert set(_paths(connection).values()) == {
-        "Prestige/ABP-758/ABP-758.mp4", "_未知厂牌/259LUXU-1475/259LUXU-1475-cd1.mp4",
+        "Prestige/ABP-758 甲/ABP-758.mp4", "_未知厂牌/259LUXU-1475/259LUXU-1475-cd1.mp4",
         "_未知厂牌/259LUXU-1475/259LUXU-1475-cd2.mp4", "未识别/c/deep/随手拍.mp4"}
-    row = connection.execute("SELECT name FROM asset WHERE path='Prestige/ABP-758/ABP-758.mp4'").fetchone()
+    row = connection.execute("SELECT name FROM asset WHERE path='Prestige/ABP-758 甲/ABP-758.mp4'").fetchone()
     assert row["name"] == "ABP-758.mp4"
     assert result.batch_log and result.batch_log.is_file()
     entries = [json.loads(line) for line in result.batch_log.read_text(encoding="utf-8").splitlines()]
@@ -96,11 +96,11 @@ def test_apply_target_exists_not_overwritten(disk):
     root, paths, connection = disk
     plan = build_plan(connection, paths, ShelfConfig())
     # 计划算好之后、执行之前，有人在目标位置放了另一个文件。
-    (root / "Prestige" / "ABP-758").mkdir(parents=True)
-    (root / "Prestige" / "ABP-758" / "ABP-758.mp4").write_bytes(b"stranger")
+    (root / "Prestige" / "ABP-758 甲").mkdir(parents=True)
+    (root / "Prestige" / "ABP-758 甲" / "ABP-758.mp4").write_bytes(b"stranger")
     result = apply_plan(connection, paths, plan)
     assert result.skipped == 1 and result.moved == 3 and result.failed == 0
-    assert (root / "Prestige" / "ABP-758" / "ABP-758.mp4").read_bytes() == b"stranger"
+    assert (root / "Prestige" / "ABP-758 甲" / "ABP-758.mp4").read_bytes() == b"stranger"
     assert (root / "a" / "ABP-758.mp4").read_bytes() == b"video-a"
     assert "a/ABP-758.mp4" in _paths(connection).values()
     entries = [json.loads(line) for line in result.batch_log.read_text(encoding="utf-8").splitlines()]
@@ -143,7 +143,7 @@ def test_apply_db_failure_renames_back(disk, monkeypatch):
     result = apply_plan(connection, paths, build_plan(connection, paths, ShelfConfig()))
     assert result.failed == 4 and result.moved == 0
     assert (root / "a" / "ABP-758.mp4").read_bytes() == b"video-a"
-    assert not (root / "Prestige").exists() or not (root / "Prestige" / "ABP-758" / "ABP-758.mp4").exists()
+    assert not (root / "Prestige").exists() or not (root / "Prestige" / "ABP-758 甲" / "ABP-758.mp4").exists()
     assert "a/ABP-758.mp4" in _paths(connection).values()
     # 附属文件没动。
     assert (root / "a" / "ABP-758.nfo").is_file()
@@ -200,7 +200,7 @@ def test_second_run_no_moves(disk):
     scan(connection, paths, ShelfConfig())
     second = organize(connection, paths, ShelfConfig())
     assert second.moved == 0 and second.failed == 0
-    assert (root / "Prestige" / "ABP-758" / "ABP-758.mp4").read_bytes() == b"video-a"
+    assert (root / "Prestige" / "ABP-758 甲" / "ABP-758.mp4").read_bytes() == b"video-a"
     batches = connection.execute("SELECT status,moved FROM organize_batch ORDER BY id").fetchall()
     assert [(b["status"], b["moved"]) for b in batches] == [("ok", 4), ("ok", 0)]
     # 第一次 organize 把空目录清掉了。
@@ -231,8 +231,8 @@ def test_preview_moves_nothing_and_writes_plan_file(disk):
     assert connection.execute("SELECT count(*) FROM organize_batch").fetchone()[0] == 0
     plan_file = paths.shelf / stats["plan_file"]
     text = plan_file.read_text(encoding="utf-8")
-    assert "MOVE\ta/ABP-758.mp4\tPrestige/ABP-758/ABP-758.mp4" in text
-    assert any("a/ABP-758.mp4 → Prestige/ABP-758/ABP-758.mp4" in line for line in lines)
+    assert "MOVE\ta/ABP-758.mp4\tPrestige/ABP-758 甲/ABP-758.mp4" in text
+    assert any("a/ABP-758.mp4 → Prestige/ABP-758 甲/ABP-758.mp4" in line for line in lines)
     assert any(line.startswith("预演：4 个要搬") for line in lines)
     assert any(line.startswith("预演完成：没有动任何文件") for line in lines)
 

@@ -1,6 +1,6 @@
 # Hidden Shelf
 
-**Turns a hard drive full of videos into a self-describing collection.** It recognizes product codes, scrapes metadata, files everything under `studio/code/`, then writes a fully static, offline browsing site at the disk root. Every derived file lives under `HiddenShelf/` and is referenced by relative path, so after you copy the whole drive, move it to another computer, switch operating systems or restore it from a cold backup, double-clicking `index.html` still browses and plays. Nothing to install on the viewing machine.
+**Turns a hard drive full of videos into a self-describing collection.** It recognizes product codes, scrapes metadata, files everything under `studio/code title-performers/`, then writes a fully static, offline browsing site at the disk root. Every derived file lives under `HiddenShelf/` and is referenced by relative path, so after you copy the whole drive, move it to another computer, switch operating systems or restore it from a cold backup, double-clicking `index.html` still browses and plays. Nothing to install on the viewing machine.
 
 ![tests](https://github.com/wanghero/Hidden-Shelf/actions/workflows/test.yml/badge.svg) · [中文](README.zh.md) · [Live demo](https://wanghero.github.io/Hidden-Shelf/) (demo data; it is a demo drive published as-is to GitHub Pages)
 
@@ -18,7 +18,7 @@ All screenshots use demo data; the first two are the [live demo](https://wangher
 
 Most media library software keeps its knowledge in its own database: move the drive to another machine and you start over; stop using the software and all that is left is a pile of renamed files. Hidden Shelf does the opposite:
 
-- **The disk is the single source of truth.** Once files are filed under `studio/code/`, titles, performers, tags, covers, contact sheets and the index are all written to `HiddenShelf/` at the disk root as plain files. Nothing depends on the state of the machine that ran it.
+- **The disk is the single source of truth.** Once files are filed under `studio/code title-performers/`, titles, performers, tags, covers, contact sheets and the index are all written to `HiddenShelf/` at the disk root as plain files. Nothing depends on the state of the machine that ran it.
 - **The site is purely static.** `index.html`, its data, images and videos use relative paths only. It opens from `file://` with no server, no database service, no network and no runtime. A phone, a TV box, a friend's laptop: anything with a browser can browse it.
 - **The whole thing is portable.** Copy or move the root directory to another drive, machine or operating system and the site keeps working without a rebuild. A cold backup of the drive is a complete collection with its own catalog.
 - **Organizing is repeatable.** After you move or rename files inside the collection, run `shelf run` again: it continues from the data it already has, never re-scrapes what it knows and never overwrites fields you edited by hand.
@@ -44,7 +44,7 @@ One `shelf run` goes through six steps:
 1. **Scan**: registers every video and its sidecars (NFO, cover, subtitles) and recognizes the product code in the file name.
 2. **Import local data**: reads NFO files and covers left by earlier scrapers, plus your hand-written `HiddenShelf/overrides.json`.
 3. **Scrape online**: asks the sources for title, studio, performers, tags, release date, cover and avatars where data is missing; offline it just skips, the later steps still run.
-4. **Organize**: renames into `studio/code/code[-cdN].ext`; videos without a recognizable code go to `未识别/` ("unrecognized").
+4. **Organize**: renames into `studio/code title-performers/code[-cdN].ext`; videos without a recognizable code go to `未识别/` ("unrecognized").
 5. **Media**: probes duration and resolution, extracts frames for a contact sheet, uses a frame as the cover when none exists, crops a portrait poster.
 6. **Build**: writes `index.html` at the disk root, an offline poster wall with filters by performer, studio and tag; click to play.
 
@@ -150,7 +150,7 @@ Official sites (dmm, 1pondo, tokyohot, fc2) also provide the plot; it is stored 
 ```
 <disk root>/
   index.html                       the result, double-click to open
-  studio/code/code[-cdN].ext       organized videos (template is configurable)
+  studio/code title-performers/code[-cdN].ext   organized videos (template is configurable)
   未识别/…                          unrecognized videos, original folder structure kept
   HiddenShelf/
     shelf.db                       SQLite database, the source of truth
@@ -180,6 +180,8 @@ Manual edits go in `HiddenShelf/overrides.json` and are merged on the next `shel
 - **NFO files and covers from an earlier scraper?** They are imported first, then moved to `HiddenShelf/legacy/<code>/`, so nothing stays next to the media.
 - **Tags in Japanese or traditional Chinese?** The site shows tags in the current language (CH / EN / JP) from a built-in table of common genres; unknown tags are shown as-is. Add translations in `src/hidden_shelf/tags_i18n.py`.
 - **Contact sheets are slow. Can I skip them?** Yes. They are the slowest part of the media step (nine frames per video). Set `sheets: false` in the disk config, pass `--no-sheets`, or turn off "Generate contact sheets" on the Settings page; off only skips generation, existing sheets stay, and a work page without a sheet just shows the cover.
+- **Don't want the title and performers in the folder name?** The default directory template is `{studio}/{code}[ {title}][-{actors}]`, which gives `Tokyo-Hot/N0900 東熱鬼畜で人生初中出し-松下栞/`. A bracketed group disappears entirely when a placeholder inside it has no value, so a work that has not been scraped yet is still `Tokyo-Hot/N0900/`, and only the first three performers are written. To go back to the code alone, run `shelf run <disk> --dir-template "{studio}/{code}"` or edit `dir_template` in that disk's `HiddenShelf/config.json`. Disks written by 1.4.11 and earlier store exactly `{studio}/{code}` — that was the default back then, so it is read as the new default; to really keep the code alone, write something explicit (for example `{studio}/{code}[ CD{cd}]`).
+
 - **Want the cover and contact sheet next to the video?** That is the default: `images_in_work_dir` is on (turn it off with `--no-images-in-work-dir` or the switch in the progress page). Copies of the cover and sheet from `HiddenShelf/` are placed beside the video as `<code>-cover.jpg` and `<stem>-sheet.jpg`, follow it when it is moved, and are taken back when the option is turned off; your own images are never touched.
 - **Screenshots or notes left in the work's own folder?** A folder whose name carries the code counts as the work's own folder; its top-level loose files move along with the video, names unchanged, subfolders stay. The dry-run plan lists them as `EXTRA` rows.
 - **A move went wrong, how do I roll back?** Each batch has `HiddenShelf/logs/organize-<time>.jsonl`. For now you call `hidden_shelf.organize.apply.rollback_batch(connection, paths, log_path)` from Python; there is no CLI entry point yet.

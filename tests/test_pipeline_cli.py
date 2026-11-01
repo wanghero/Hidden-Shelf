@@ -27,7 +27,7 @@ def test_run_end_to_end(disk):
     result = pipeline.run(disk, progress=pipeline.ConsoleProgress())
     assert result.ok, result.error
     assert set(result.steps) == {"scan", "import", "scrape", "organize", "media", "build"}
-    assert (disk / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
+    assert (disk / "Prestige" / "ABP-758 标题-甲" / "ABP-758.mp4").is_file()
     assert (disk / "_未知厂牌" / "259LUXU-1475" / "259LUXU-1475-cd1.mp4").is_file()
     assert (disk / "未识别" / "c" / "随手拍.mp4").is_file()
     for name in ("a", "b", "c"):
@@ -44,7 +44,7 @@ def test_run_end_to_end(disk):
         runs = connection.execute("SELECT step,status FROM run ORDER BY id").fetchall()
         assert runs == [("scan", "ok"), ("import", "ok"), ("scrape", "ok"), ("organize", "ok"), ("media", "ok"), ("build", "ok")]
         assert connection.execute("SELECT count(*) FROM asset WHERE vanished=1").fetchone()[0] == 0
-        assert connection.execute("SELECT path FROM asset WHERE code='ABP-758'").fetchone()[0] == "Prestige/ABP-758/ABP-758.mp4"
+        assert connection.execute("SELECT path FROM asset WHERE code='ABP-758'").fetchone()[0] == "Prestige/ABP-758 标题-甲/ABP-758.mp4"
 
 
 def test_run_twice_is_stable(disk):
@@ -54,7 +54,7 @@ def test_run_twice_is_stable(disk):
     assert second.steps["organize"]["moved"] == 0
     assert second.steps["scan"]["added"] == 0 and second.steps["scan"]["vanished"] == 0
     assert second.steps["media"]["sheets"] == 0
-    assert (disk / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
+    assert (disk / "Prestige" / "ABP-758 标题-甲" / "ABP-758.mp4").is_file()
 
 
 def test_run_single_steps(disk):
@@ -153,7 +153,7 @@ def test_dry_run_then_real_run_matches(disk):
     real = pipeline.run(disk, scrape_options=pipeline.ScrapeOptions(offline=True))
     assert real.ok and not real.dry_run
     assert real.steps["organize"]["moved"] == preview.steps["organize"]["move"]
-    assert (disk / "Prestige" / "ABP-758" / "ABP-758.mp4").is_file()
+    assert (disk / "Prestige" / "ABP-758 标题-甲" / "ABP-758.mp4").is_file()
 
 
 def test_cli_dry_run_prints_summary(disk, capsys):

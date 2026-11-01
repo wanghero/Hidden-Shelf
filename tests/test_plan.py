@@ -157,3 +157,24 @@ def test_placeholder_values_and_definition(disk):
     assert definition_of(1280, 720) == "720p"
     assert definition_of(640, 480) == "SD"
     assert definition_of(None, None) == ""
+
+
+def test_default_dir_template_carries_title_and_performers(disk):
+    """用户 2026-11-01 定的默认目录名：`N0900 東熱鬼畜で人生初中出し-松下栞`。"""
+    root, paths, connection = disk
+    asset_id = connection.execute("SELECT id FROM asset WHERE path='a/ABP-758.mp4'").fetchone()[0]
+    connection.execute("UPDATE asset SET code='N0900', code_key='N0900', studio='Tokyo-Hot', "
+                       "title='東熱鬼畜で人生初中出し' WHERE id=?", (asset_id,))
+    entity_id = connection.execute(
+        "INSERT INTO entity(kind,canonical_name,normalized_name) VALUES('performer','松下栞','松下栞')").lastrowid
+    connection.execute("INSERT INTO asset_entity(asset_id,entity_id,role,source) VALUES(?,?,'performer','auto:test')",
+                       (asset_id, entity_id))
+    connection.commit()
+    targets = _targets(build_plan(connection, paths, ShelfConfig()))
+    assert targets["a/ABP-758.mp4"][1] == "Tokyo-Hot/N0900 東熱鬼畜で人生初中出し-松下栞/N0900.mp4"
+
+    # 标题还没刮到的作品退回只有番号，不会留下 `N0900 -` 这种尾巴。
+    connection.execute("UPDATE asset SET title='' WHERE id=?", (asset_id,))
+    connection.execute("DELETE FROM asset_entity WHERE asset_id=?", (asset_id,))
+    connection.commit()
+    assert _targets(build_plan(connection, paths, ShelfConfig()))["a/ABP-758.mp4"][1] == "Tokyo-Hot/N0900/N0900.mp4"

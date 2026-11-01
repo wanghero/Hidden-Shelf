@@ -130,7 +130,7 @@ def test_pipeline_organizes_into_english_folder(tmp_root: Path, fake_video):
     (tmp_root / "030315-819.nfo").write_text("<movie><title>甲</title><studio>カリビアンコム</studio></movie>", encoding="utf-8")
     result = pipeline.run(tmp_root, scrape_options=pipeline.ScrapeOptions(offline=True))
     assert result.ok, result.error
-    assert (tmp_root / "Caribbeancom" / "030315-819" / "030315-819.mp4").is_file()
+    assert (tmp_root / "Caribbeancom" / "030315-819 甲" / "030315-819.mp4").is_file()
     assert not (tmp_root / "カリビアンコム").exists()
     studios = read_data_js(ShelfPaths(tmp_root).site_data / "entities.js")["studios"]
     assert [s["name"] for s in studios] == ["Caribbeancom"]

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from hidden_shelf.config import ShelfConfig
+from hidden_shelf.config import DIR_TEMPLATE, LEGACY_DIR_TEMPLATE, ShelfConfig
 from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 
 
@@ -61,7 +61,7 @@ def test_config_roundtrip_and_defaults(tmp_root: Path):
     config = ShelfConfig.load(paths)
     assert config == ShelfConfig()
     assert config.move_unrecognized is True
-    assert config.dir_template == "{studio}/{code}"
+    assert config.dir_template == "{studio}/{code}[ {title}][-{actors}]"
     assert config.file_template == "{code}[-cd{cd}]"
     assert config.unknown_studio_dir == "_未知厂牌"
     assert config.code_patterns == []
@@ -160,3 +160,16 @@ def test_config_load_does_not_create_dir(tmp_path: Path):
     ShelfConfig(move_unrecognized=False).save(paths)
     paths.ensure()
     assert ShelfConfig.load(paths).move_unrecognized is False
+
+
+def test_old_default_dir_template_is_upgraded_but_a_custom_one_is_kept(tmp_root: Path):
+    """1.4.11 及之前的盘上存着老的默认模板，读的时候升到带标题与出演者的新默认值。"""
+    paths = ShelfPaths(tmp_root)
+    paths.shelf.mkdir(parents=True, exist_ok=True)
+
+    paths.config.write_text(json.dumps({"dir_template": LEGACY_DIR_TEMPLATE}), encoding="utf-8")
+    assert ShelfConfig.load(paths).dir_template == DIR_TEMPLATE
+
+    # 自己写过模板的盘一个字不动——哪怕写的只是番号。
+    paths.config.write_text(json.dumps({"dir_template": "{code}"}), encoding="utf-8")
+    assert ShelfConfig.load(paths).dir_template == "{code}"
