@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .. import __version__, pipeline
+from .. import __version__, changelog, pipeline
 from .browse import BrowseError, list_directory, list_roots
 from .events import RunLog
 from .runner import RunBusy, RunManager, RunOptions
@@ -93,6 +93,7 @@ def create_app(manager: RunManager | None = None, *, static_dir: Path = STATIC_D
     def index() -> HTMLResponse:
         template = environment.get_template("progress.html.j2")
         return HTMLResponse(template.render(version=__version__, language="zh", steps=list(pipeline.STEPS),
+                                           changelog=[dict(entry) for entry in changelog.entries()],
                                            step_labels=pipeline.STEP_LABELS))
 
     @app.get("/static/{name:path}")

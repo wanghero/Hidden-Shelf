@@ -15,7 +15,7 @@
 </head>
 <body data-version="{{ version }}">
   <div id="app" class="shell"></div>
-  <script>window.__shelfServe = {version: {{ version | tojson }}, steps: {{ steps | tojson }}, stepLabels: {{ step_labels | tojson }}};</script>
+  <script>window.__shelfServe = {version: {{ version | tojson }}, steps: {{ steps | tojson }}, stepLabels: {{ step_labels | tojson }}, changelog: {{ changelog | tojson }}};</script>
   <script src="/static/i18n.js"></script>
   <script src="/static/progress-core.js"></script>
   <script src="/static/ripple.js"></script>

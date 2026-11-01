@@ -66,6 +66,8 @@
     parent.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
   }
   function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  //: 本地读不到 CHANGELOG.md 时，空状态里给的外链。
+  var CHANGELOG_URL = 'https://github.com/wanghero/Hidden-Shelf/blob/main/CHANGELOG.md';
   var ICONS = {
     film: '<rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>',
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
@@ -113,10 +115,15 @@
   var sourcesInfo = null;        // GET /api/sources 的响应
   var sourcesError = null;
   var sourcesTimer = null;
-  /* 三个视图：运行（表单 + 步骤）、设置（盘上选项 + 来源与登录）、日志。用 hash 路由，刷新后停在原页。 */
+  /* 三个视图：运行（表单 + 步骤）、设置（盘上选项 + 来源与登录）、日志。用 hash 路由，刷新后停在原页。
+     「更新记录」是第四个视图，但不占侧栏一项——入口是侧栏底部的版本号。 */
   var VIEWS = ['run', 'settings', 'log'];
+  var EXTRA_VIEWS = ['changelog'];
   var VIEW_ICONS = { run: 'terminal', settings: 'sliders', log: 'scroll' };
-  function viewFromHash() { var name = (location.hash || '').replace(/^#\/?/, ''); return VIEWS.indexOf(name) === -1 ? 'run' : name; }
+  function viewFromHash() {
+    var name = (location.hash || '').replace(/^#\/?/, '');
+    return VIEWS.indexOf(name) === -1 && EXTRA_VIEWS.indexOf(name) === -1 ? 'run' : name;
+  }
   var view = viewFromHash();
   /* 表单值与视图无关，存在这里；切页重建 DOM 时从这里回填。images/sheets 是盘的设置，开始时一并发给服务端写进盘上配置。 */
   var opts = { root: '', move: true, offline: false, dryRun: false, force: false, images: true, sheets: true };
@@ -476,6 +483,8 @@
       cols.appendChild(renderOptionsCard());
       cols.appendChild(renderSourcesCard());
       page.appendChild(cols);
+    } else if (view === 'changelog') {
+      page.appendChild(renderChangelog());
     } else {
       page.appendChild(renderLogCard());
     }
@@ -510,7 +519,50 @@
           })) : null),
         h('button', { class: 'footer-button', 'data-ripple': true, 'aria-label': t('lang.label'),
           onclick: function () { lang = nextLang(); writePref('lang', lang); applyLang(); buildShell(); update(); } }, langSwitch()),
-        h('div', { class: 'version', text: t('version') + ' ' + (boot.version || document.body.getAttribute('data-version') || '') })));
+        h('a', { class: 'version' + (view === 'changelog' ? ' active' : ''), href: '#/changelog', 'data-ripple': true,
+          'aria-current': view === 'changelog' ? 'page' : null, title: t('nav.changelog'),
+          onclick: function () { drawerOpen = false; } },
+          h('span', { text: t('version') + ' ' + (boot.version || document.body.getAttribute('data-version') || '') }))));
+  }
+
+  /* ---------- 更新记录 ---------- */
+
+  /** 条目正文：`` `代码` `` 与 `**粗体**` 建成元素，别的当纯文本——不拼 HTML。 */
+  function inlineNodes(text) {
+    return core.inlineParts(text).map(function (part) {
+      if (part.kind === 'code') return h('code', { text: part.text });
+      if (part.kind === 'strong') return h('strong', { text: part.text });
+      return document.createTextNode(part.text);
+    });
+  }
+
+  function renderChangelog() {
+    var entries = boot.changelog || [];
+    if (!entries.length) {
+      return h('div', { class: 'card' }, h('div', { class: 'card-body' },
+        h('div', { class: 'state' }, h('div', { class: 'state-icon' }, icon('scroll')),
+          h('h3', { class: 'state-title', text: t('changelog.empty.title') }),
+          h('p', { class: 'state-body', text: t('changelog.empty.body') }),
+          h('a', { class: 'button soft', 'data-ripple': true, href: CHANGELOG_URL, target: '_blank', rel: 'noreferrer noopener' },
+            h('span', { text: t('changelog.source') })))));
+    }
+    var current = boot.version || document.body.getAttribute('data-version') || '';
+    return h('div', { class: 'changelog' }, entries.map(function (entry) {
+      return h('section', { class: 'card release' },
+        h('header', { class: 'release-head' },
+          h('h2', { class: 'release-version mono', text: 'v' + entry.version }),
+          entry.version === current ? h('span', { class: 'pill primary', text: t('changelog.current') }) : null,
+          h('time', { class: 'release-date', datetime: entry.date, text: entry.date })),
+        h('div', { class: 'release-body' },
+          entry.note ? h('p', { class: 'release-note' }, inlineNodes(entry.note)) : null,
+          (entry.groups || []).map(function (group) {
+            return h('div', { class: 'release-group' },
+              group.title ? h('h3', { class: 'release-group-title', text: group.title }) : null,
+              h('ul', { class: 'release-items' }, (group.items || []).map(function (item) {
+                return h('li', null, inlineNodes(item));
+              })));
+          })));
+    }));
   }
 
   function renderForm() {
@@ -736,6 +788,11 @@
 
   function update() {
     if (!refs.headSub) return;
+    if (view === 'changelog') {
+      clear(refs.headSub);
+      refs.headSub.appendChild(h('span', { text: t('changelog.sub') }));
+      return;
+    }
     // 页头状态
     var headKey = state.running ? 'page.running' : !state.result ? 'page.idle' : state.result.cancelled ? 'page.cancelled' : state.result.ok ? (state.result.dry_run ? 'page.dry_run' : 'page.done') : 'page.failed';
     var headDot = state.running ? 'running' : !state.result ? '' : state.result.cancelled ? 'skipped' : state.result.ok ? 'done' : 'failed';

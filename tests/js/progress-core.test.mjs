@@ -156,3 +156,24 @@ test('browseUrl encodes the path and omits it when empty', () => {
   assert.equal(core.browseUrl('', false), '/api/browse');
   assert.equal(core.browseUrl(null, true), '/api/browse?show_hidden=1');
 });
+
+test('更新记录条目的行内写法只认代码与粗体，尖括号不当标记', () => {
+  assert.deepEqual(core.inlineParts('模板 `{code}` 是 **必填**'), [
+    { kind: 'text', text: '模板 ' },
+    { kind: 'code', text: '{code}' },
+    { kind: 'text', text: ' 是 ' },
+    { kind: 'strong', text: '必填' },
+  ]);
+  // 没有标记就整段是一块文本；HTML 片段原样留着，由调用方建文本节点。
+  assert.deepEqual(core.inlineParts('<script>x</script>'), [{ kind: 'text', text: '<script>x</script>' }]);
+  assert.deepEqual(core.inlineParts(''), []);
+  assert.deepEqual(core.inlineParts(null), []);
+  // 落单的反引号不吃掉后面的字
+  assert.deepEqual(core.inlineParts('a `b'), [{ kind: 'text', text: 'a `b' }]);
+});
+
+test('三套字典的 key 完全一致', () => {
+  const keys = (d) => Object.keys(d).sort().join('\n');
+  assert.equal(keys(dict.en), keys(dict.zh));
+  assert.equal(keys(dict.ja), keys(dict.zh));
+});

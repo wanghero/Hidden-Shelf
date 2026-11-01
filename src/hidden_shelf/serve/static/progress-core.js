@@ -163,6 +163,24 @@
     });
   }
 
+  /** 更新记录条目里的行内 Markdown → 安全片段数组。
+   *  只认 `` `代码` `` 与 `**粗体**` 两种写法——CHANGELOG 里只用到这两种。先切片再给前端建
+   *  文本节点，所以这里不拼 HTML，条目里的 `<` 永远只是一个字符。 */
+  function inlineParts(text) {
+    var parts = [];
+    var rest = String(text == null ? '' : text);
+    var mark = /`([^`]+)`|\*\*([^*]+)\*\*/;
+    var found = rest.match(mark);
+    while (found) {
+      if (found.index > 0) parts.push({ kind: 'text', text: rest.slice(0, found.index) });
+      parts.push(found[1] != null ? { kind: 'code', text: found[1] } : { kind: 'strong', text: found[2] });
+      rest = rest.slice(found.index + found[0].length);
+      found = rest.match(mark);
+    }
+    if (rest) parts.push({ kind: 'text', text: rest });
+    return parts;
+  }
+
   /** `/api/browse` 的查询串：path 空就不带 `path=`。 */
   function browseUrl(path, showHidden) {
     var query = [];
@@ -173,5 +191,5 @@
 
   return { STATUS: STATUS, initialState: initialState, reduce: reduce, reduceAll: reduceAll, percentOf: percentOf,
     formatElapsed: formatElapsed, filterLog: filterLog, summaryOf: summaryOf,
-    breadcrumbs: breadcrumbs, sortEntries: sortEntries, browseUrl: browseUrl };
+    breadcrumbs: breadcrumbs, sortEntries: sortEntries, browseUrl: browseUrl, inlineParts: inlineParts };
 });
