@@ -4,7 +4,7 @@ import hidden_shelf
 
 
 def test_version():
-    assert hidden_shelf.__version__ == "1.4.9"
+    assert hidden_shelf.__version__ == "1.4.10"
 
 
 def test_fake_video(fake_video, tmp_path: Path):

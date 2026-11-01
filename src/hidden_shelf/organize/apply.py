@@ -52,6 +52,11 @@ class ApplyResult:
     extras: int = 0
 
 
+def _is_junk(name: str) -> bool:
+    """系统自己生成的文件：不带走、也不算目录里的内容。"""
+    return name in _JUNK_NAMES or name.startswith("._")
+
+
 def _is_own_dir(directory: str, code: str | None) -> bool:
     """`directory`（相对盘根）是不是这部片自己的目录：目录名里认出的番号就是它的番号。盘根不算。"""
     if not directory or not code:
@@ -79,7 +84,7 @@ def extra_files_for(connection: sqlite3.Connection, paths: ShelfPaths, code: str
         return []
     for entry in entries:
         name = entry.name
-        if name in _JUNK_NAMES or name.startswith("._"):
+        if _is_junk(name):
             continue
         try:
             if not entry.is_file(follow_symlinks=False):
@@ -293,7 +298,9 @@ def _move_one(connection, paths, asset_id: int, old_path: str, new_path: str) ->
 def remove_empty_dirs(root: Path, *, protect: set[Path] | None = None) -> int:
     """自底向上删空目录。只删空的；资料目录 `HiddenShelf`、`未识别`、root 本身与 `protect` 不删。
 
-    只有 `.DS_Store` 的目录视为空：先删 `.DS_Store` 再删目录。
+    只剩系统垃圾（`_JUNK_NAMES`：`.DS_Store`、`Thumbs.db`、`desktop.ini`、`ehthumbs.db`，以及 macOS 的 `._*`
+    资源叉）的目录视为空：先删这些文件再删目录。视频搬走后留下的 `Tokyo-Hot n0878-SD/Thumbs.db` 这种壳就是这样清掉的
+    （用户 2026-11-01）。有任何别的文件就一个字节不动。
     """
     shelf = (root / SHELF_DIR).resolve()
     protected = {root.resolve(), shelf, (root / UNRECOGNIZED_DIR).resolve()}
@@ -304,7 +311,7 @@ def remove_empty_dirs(root: Path, *, protect: set[Path] | None = None) -> int:
         resolved = directory.resolve()
         if resolved in protected or resolved.is_relative_to(shelf):
             continue
-        if files and all(name == ".DS_Store" for name in files):
+        if files and all(_is_junk(name) for name in files):
             for name in files:
                 try:
                     (directory / name).unlink()

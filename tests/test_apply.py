@@ -153,12 +153,24 @@ def test_remove_empty_dirs(disk):
     apply_plan(connection, paths, build_plan(connection, paths, ShelfConfig()))
     (root / "empty" / "nested").mkdir(parents=True)
     (root / "未识别" / "stays").mkdir(parents=True)
+    # 视频搬走后只剩 Windows 缩略图缓存与 macOS 资源叉的壳目录，也算空
+    shell = root / "Tokyo-Hot n0878-SD"
+    shell.mkdir()
+    (shell / "Thumbs.db").write_bytes(b"x")
+    (shell / "._n0878.avi").write_bytes(b"x")
+    (shell / "desktop.ini").write_bytes(b"x")
+    # 还有别的文件的目录不动
+    kept = root / "keep"
+    kept.mkdir()
+    (kept / "Thumbs.db").write_bytes(b"x")
+    (kept / "notes.txt").write_text("x", encoding="utf-8")
     paths.ensure()
     removed = remove_empty_dirs(root)
-    # a（只剩 .DS_Store）、b、c/deep、c、empty/nested、empty、未识别/stays
-    assert removed == 7
-    for name in ("a", "b", "c", "empty"):
+    # a（只剩 .DS_Store）、b、c/deep、c、empty/nested、empty、未识别/stays、Tokyo-Hot n0878-SD
+    assert removed == 8
+    for name in ("a", "b", "c", "empty", "Tokyo-Hot n0878-SD"):
         assert not (root / name).exists(), name
+    assert (kept / "Thumbs.db").is_file() and (kept / "notes.txt").is_file()
     # `未识别/` 本身不删，它下面的空目录照删。
     assert (root / "未识别").is_dir() and not (root / "未识别" / "stays").exists()
     assert paths.sources.is_dir()  # 资料目录下的空目录不动

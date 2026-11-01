@@ -2,6 +2,12 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## 1.4.10 - 2026-11-01
+
+### 修复
+
+- 归位后清空目录时，只剩系统垃圾（`Thumbs.db`、`desktop.ini`、`ehthumbs.db`、`.DS_Store`、macOS `._*` 资源叉）的目录也算空：先删这些文件再删目录。此前只认 `.DS_Store`，Windows 上整理过的盘会留下一排 `Tokyo-Hot n0878-SD/Thumbs.db` 壳目录。有任何别的文件的目录照旧不动。
+
 ## 1.4.9 - 2026-10-30
 
 ### 新增
