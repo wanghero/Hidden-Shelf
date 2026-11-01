@@ -18,14 +18,14 @@ import os
 import posixpath
 import sqlite3
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from ..config import ShelfConfig
 from ..paths import SHELF_DIR, UNRECOGNIZED_DIR, ShelfPaths
-from ..rules.codes import release_code_from_text, same_release_code
+from ..rules.codes import normalise_code_key, release_code_from_text, same_release_code
 from ..rules.sidecars import medium_of
 from .plan import SKIP_TARGET_EXISTS, Plan, PlanRow, build_plan
 
@@ -50,6 +50,8 @@ class ApplyResult:
     batch_log: Path | None = None
     removed_dirs: int = 0
     extras: int = 0
+    #: 从没有视频的孤儿目录认领进作品目录的文件数。
+    orphans: int = 0
 
 
 def _is_junk(name: str) -> bool:
@@ -74,6 +76,9 @@ def extra_files_for(connection: sqlite3.Connection, paths: ShelfPaths, code: str
     source_dir = posixpath.dirname(current_path)
     target_dir = posixpath.dirname(target_path)
     if source_dir == target_dir or not _is_own_dir(source_dir, code):
+        return []
+    if _same_place(paths.absolute(source_dir), paths.absolute(target_dir)):
+        # 只改大小写（`n0860/` → `N0860/`）：大小写不敏感的盘上是同一个目录，什么都不用带
         return []
     registered = {str(row["path"]) for row in connection.execute(
         "SELECT path FROM sidecar WHERE path LIKE ?", (source_dir + "/%",))}
@@ -106,7 +111,7 @@ def _move_extras(connection, paths, code: str | None, old_path: str, video_targe
     target_dir = paths.absolute(video_target).parent
     for rel in extra_files_for(connection, paths, code, old_path, video_target):
         source = paths.absolute(rel)
-        destination = _free_name(target_dir, source.name)
+        destination = _free_name(target_dir, source.name, source=source)
         new_rel = paths.relative(destination)
         try:
             os.rename(source, destination)
@@ -149,21 +154,54 @@ def _update_row(connection: sqlite3.Connection, asset_id: int, old_path: str, ne
         (new_path, posixpath.basename(new_path), int(asset_id), old_path)).rowcount
 
 
+def _fix_dir_case(root: Path, directory: Path) -> None:
+    """大小写不敏感的盘（exFAT、NTFS、默认 APFS、SMB）上，`mkdir N0867` 遇到已有的 `n0867` 是空操作，
+    目录名会一直留着旧的大小写。逐层比对盘上的真实名字，只差大小写就把目录改成要的写法。
+    大小写敏感的盘上 `N0867` 不存在，这里什么都不做，走正常的 mkdir。"""
+    try:
+        relative = directory.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return
+    current = root
+    for part in relative.parts:
+        wanted = current / part
+        if not wanted.exists():
+            return
+        try:
+            actual = next((name for name in os.listdir(current) if name == part), None)
+            if actual is None:
+                actual = next((name for name in os.listdir(current) if name.casefold() == part.casefold()), None)
+        except OSError:
+            return
+        if actual and actual != part:
+            os.rename(current / actual, wanted)
+        current = wanted
+
+
 def _rename(paths: ShelfPaths, old_rel: str, new_rel: str) -> None:
     source = paths.absolute(old_rel)
     target = paths.absolute(new_rel)
     target.parent.mkdir(parents=True, exist_ok=True)
+    _fix_dir_case(paths.root, target.parent)
     os.rename(source, target)
 
 
-def _free_name(directory: Path, name: str) -> Path:
-    """`directory/name` 被占着就在主名后加 `-1`、`-2`。"""
+def _same_place(first: Path, second: Path) -> bool:
+    """两个路径指向盘上同一个文件或目录（大小写不敏感的盘上 `n0860` 与 `N0860` 是同一个）；任一不存在算不是。"""
+    try:
+        return os.path.samefile(first, second)
+    except OSError:
+        return False
+
+
+def _free_name(directory: Path, name: str, *, source: Path | None = None) -> Path:
+    """`directory/name` 被占着就在主名后加 `-1`、`-2`。占着它的就是 `source` 自己（只改大小写）不算占。"""
     candidate = directory / name
     stem, dot, ext = name.rpartition(".")
     if not dot or not stem:
         stem, ext = name, ""
     counter = 1
-    while candidate.exists():
+    while candidate.exists() and not (source is not None and _same_place(candidate, source)):
         candidate = directory / (f"{stem}-{counter}.{ext}" if ext else f"{stem}-{counter}")
         counter += 1
     return candidate
@@ -186,7 +224,7 @@ def _move_sidecars(connection, paths, asset_id: int, video_target: str, log) -> 
             # 没番号的附属文件、以及程序自己放在视频旁的图片副本（`placed`），都跟着视频进新目录。
             directory = paths.absolute(video_target).parent
         directory.mkdir(parents=True, exist_ok=True)
-        destination = _free_name(directory, source.name)
+        destination = _free_name(directory, source.name, source=source)
         new_rel = paths.relative(destination)
         if new_rel == sidecar["path"]:
             continue
@@ -218,7 +256,8 @@ def apply_plan(connection: sqlite3.Connection, paths: ShelfPaths, plan: Plan, *,
         log_path = paths.logs / f"organize-{stamp}-{counter}.jsonl"
         counter += 1
     result.batch_log = log_path
-    if not moves:
+    orphans = orphan_extras(connection, paths)
+    if not moves and not orphans:
         log_path.touch()
         return result
     backup = backup_database(paths, connection)
@@ -252,7 +291,79 @@ def apply_plan(connection: sqlite3.Connection, paths: ShelfPaths, plan: Plan, *,
                 log({"kind": "asset", "asset_id": row.asset_id, "from": row.current_path,
                      "to": row.target_path, "ok": False, "error": outcome})
                 progress(f"[{index}/{len(moves)}] 失败 {row.current_path}：{outcome}")
+        # 视频都搬完了再认领孤儿目录：这时作品目录已经是最终位置
+        result.orphans = adopt_orphan_extras(connection, paths, log, progress=progress)
     return result
+
+
+def orphan_extras(connection: sqlite3.Connection, paths: ShelfPaths, *,
+                  planned: Mapping[int, str] | None = None) -> dict[str, list[str]]:
+    """没有视频、目录名却认得出某部已入库作品番号的目录里的零散文件：`{作品目录: [相对路径…]}`。
+
+    视频先一步被当未识别搬走（或用户自己挪走）时，同目录的图集、种子会留在原地（用户 2026-11-01 的
+    `Tokyo-Hot n0867-AVI/001.jpg`）。这些目录顶层只要没有任何视频、库里又有这个番号的作品，顶层普通文件就归
+    那部作品的目录。`HiddenShelf/`、`未识别/`、系统目录、盘根不看；子目录不进；有视频的目录不碰（那是正常归位的事）。
+    `planned` 是 `{asset_id: 目标路径}`：预演时作品还没搬，目标目录按计划里的算。
+    """
+    from ..scan import SKIP_DIRS
+    found: dict[str, list[str]] = {}
+    skip = {UNRECOGNIZED_DIR.casefold()} | set(SKIP_DIRS)
+    for current, dirs, files in os.walk(paths.root):
+        directory = Path(current)
+        dirs[:] = sorted(name for name in dirs
+                         if name.casefold() not in skip and not (directory / name).is_symlink())
+        if directory == paths.root:
+            continue
+        code = release_code_from_text(directory.name)
+        if not code or any(medium_of(name) == "video" for name in files):
+            continue
+        key = normalise_code_key(code)
+        owner = connection.execute(
+            "SELECT id, path FROM asset WHERE medium='video' AND vanished=0 AND code_key=? ORDER BY id LIMIT 1",
+            (key,)).fetchone()
+        if owner is None:
+            continue
+        rel_dir = paths.relative(directory)
+        target_dir = posixpath.dirname((planned or {}).get(int(owner["id"]), str(owner["path"])))
+        if rel_dir == target_dir:
+            continue
+        registered = {str(row["path"]) for row in connection.execute(
+            "SELECT path FROM sidecar WHERE path LIKE ?", (rel_dir + "/%",))}
+        loose = []
+        for name in sorted(files):
+            if _is_junk(name) or f"{rel_dir}/{name}" in registered:
+                continue
+            try:
+                if not (directory / name).is_file() or (directory / name).is_symlink():
+                    continue
+            except OSError:
+                continue
+            loose.append(f"{rel_dir}/{name}")
+        if loose:
+            found.setdefault(target_dir, []).extend(loose)
+    return found
+
+
+def adopt_orphan_extras(connection: sqlite3.Connection, paths: ShelfPaths, log, *,
+                        progress: Progress = lambda message: None) -> int:
+    """把 `orphan_extras` 找到的文件搬进作品目录；返回搬成的个数。撞名另起名字，绝不覆盖。"""
+    moved = 0
+    for target_dir, files in orphan_extras(connection, paths).items():
+        directory = paths.absolute(target_dir)
+        directory.mkdir(parents=True, exist_ok=True)
+        for rel in files:
+            source = paths.absolute(rel)
+            destination = _free_name(directory, source.name, source=source)
+            new_rel = paths.relative(destination)
+            try:
+                os.rename(source, destination)
+            except OSError as error:
+                log({"kind": "extra", "from": rel, "to": new_rel, "ok": False, "error": str(error)})
+                continue
+            log({"kind": "extra", "from": rel, "to": new_rel, "ok": True})
+            moved += 1
+        progress(f"认领 {posixpath.dirname(files[0])}/ 里的 {len(files)} 个文件 → {target_dir}/")
+    return moved
 
 
 def _code_of(connection, asset_id: int) -> str | None:
@@ -373,13 +484,16 @@ def organize(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfCon
     connection.commit()
     progress(f"归位完成：搬了 {result.moved} 个，跳过 {result.skipped} 个，失败 {result.failed} 个，"
              + (f"连带 {result.extras} 个目录内文件，" if result.extras else "")
+             + (f"认领 {result.orphans} 个孤儿目录里的文件，" if result.orphans else "")
              + f"清掉空目录 {result.removed_dirs} 个")
     return result
 
 
-def _write_plan_file(paths: ShelfPaths, plan: Plan, extras: dict[int, list[str]] | None = None) -> Path:
+def _write_plan_file(paths: ShelfPaths, plan: Plan, extras: dict[int, list[str]] | None = None,
+                     orphans: dict[str, list[str]] | None = None) -> Path:
     """把整份计划写进 `logs/plan-<时间>.txt`：首行是汇总，之后每行 `MOVE\\t现路径\\t目标`、
-    `EXTRA\\t连带文件\\t目标目录/`（紧跟在它所属的 MOVE 后面）或 `SKIP\\t现路径\\t原因`。"""
+    `EXTRA\\t连带文件\\t目标目录/`（紧跟在它所属的 MOVE 后面）、`SKIP\\t现路径\\t原因`，
+    末尾是 `ORPHAN\\t孤儿目录里的文件\\t作品目录/`。"""
     paths.logs.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     plan_path = paths.logs / f"plan-{stamp}.txt"
@@ -397,6 +511,9 @@ def _write_plan_file(paths: ShelfPaths, plan: Plan, extras: dict[int, list[str]]
                 lines.append(f"EXTRA\t{rel}\t{posixpath.dirname(row.target_path)}/")
         else:
             lines.append(f"SKIP\t{row.current_path}\t{row.reason}")
+    for target_dir, files in (orphans or {}).items():
+        for rel in files:
+            lines.append(f"ORPHAN\t{rel}\t{target_dir}/")
     plan_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return plan_path
 
@@ -411,11 +528,14 @@ def preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: 
     counts = plan.counts
     extras = _preview_extras(connection, paths, plan.moves)
     extra_total = sum(len(files) for files in extras.values())
+    orphans = orphan_extras(connection, paths, planned={row.asset_id: row.target_path for row in plan.moves})
+    orphan_total = sum(len(files) for files in orphans.values())
     progress(f"预演：{counts['move']} 个要搬，{counts['unchanged']} 个已就位，{counts['skip']} 个跳过"
-             + (f"，连带 {extra_total} 个目录内文件" if extra_total else ""))
+             + (f"，连带 {extra_total} 个目录内文件" if extra_total else "")
+             + (f"，认领 {orphan_total} 个孤儿目录里的文件" if orphan_total else ""))
     for reason, count in sorted(plan.reasons.items()):
         progress(f"  跳过原因 {reason}：{count}")
-    plan_path = _write_plan_file(paths, plan, extras)
+    plan_path = _write_plan_file(paths, plan, extras, orphans)
     shown = paths.relative(plan_path)
     moves = plan.moves
     for index, row in enumerate(moves[:PREVIEW_CONSOLE_LIMIT], 1):
@@ -430,6 +550,7 @@ def preview_organize(connection: sqlite3.Connection, paths: ShelfPaths, config: 
         "unchanged": counts["unchanged"],
         "skip": counts["skip"],
         "extras": extra_total,
+        "orphans": orphan_total,
         "reasons": dict(sorted(plan.reasons.items())),
         "plan_file": paths.shelf_relative(plan_path),
     }

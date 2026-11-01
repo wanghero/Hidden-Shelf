@@ -341,21 +341,22 @@ class DatedCodeSeparatorTests(unittest.TestCase):
 
 
 class TokyoHotShapeTests(unittest.TestCase):
-    def test_the_canonical_form_is_lowercase_and_zero_padded(self):
-        self.assertEqual(tokyo_hot_code("N0646"), "n0646")
-        self.assertEqual(tokyo_hot_code("n646"), "n0646")
-        self.assertEqual(tokyo_hot_code("K1234"), "k1234")
-        self.assertEqual(tokyo_hot_code("RED123"), "red-123")
-        self.assertEqual(tokyo_hot_code("red_123"), "red-123")
+    def test_the_canonical_form_is_uppercase_and_zero_padded(self):
+        # 用户 2026-11-01 定：和别的番号一样大写（此前跟 peach 取小写）
+        self.assertEqual(tokyo_hot_code("N0646"), "N0646")
+        self.assertEqual(tokyo_hot_code("n646"), "N0646")
+        self.assertEqual(tokyo_hot_code("k1234"), "K1234")
+        self.assertEqual(tokyo_hot_code("RED123"), "RED-123")
+        self.assertEqual(tokyo_hot_code("red_123"), "RED-123")
         self.assertEqual(tokyo_hot_code("ABW-132"), "")
 
     def test_the_key_the_identity_and_the_shape_gate_agree(self):
-        self.assertEqual(normalise_code_key("N0646"), "n0646")
-        self.assertEqual(release_identity("N0646"), "n0646")
+        self.assertEqual(normalise_code_key("n0646"), "N0646")
+        self.assertEqual(release_identity("n0646"), "N0646")
         self.assertTrue(same_release_code("n646", "N0646"))
-        self.assertTrue(is_jav_code("n0646"))
+        self.assertTrue(is_jav_code("n0646") and is_jav_code("N0646"))
         self.assertTrue(is_uncensored_code("n0646"))
-        self.assertEqual(code_query_variants("N0646"), ("n0646",))
+        self.assertEqual(code_query_variants("n0646"), ("N0646",))
 
     def test_kirari_numbers_carry_an_s_before_the_serial(self):
         for value in ("MKBD-S89", "MKBD-S118", "MKD-S89", "mkbd-s118"):
@@ -388,19 +389,19 @@ class TokyoHotShapeTests(unittest.TestCase):
         self.assertEqual(jav_fallback_title('MKD-S118.mp4', 'MKD-S118'), '')
 
     def test_a_bare_number_is_read_only_at_the_head_of_the_name(self):
-        self.assertEqual(release_code_from_filename("n1032.mkv"), "n1032")
-        self.assertEqual(release_code_from_filename("n0762.mkv"), "n0762")
+        self.assertEqual(release_code_from_filename("n1032.mkv"), "N1032")
+        self.assertEqual(release_code_from_filename("n0762.mkv"), "N0762")
         self.assertEqual(
-            release_code_from_filename("n1025_rena_yamamoto_ss_n_fhd.wmv"), "n1025")
+            release_code_from_filename("n1025_rena_yamamoto_ss_n_fhd.wmv"), "N1025")
         self.assertEqual(
             release_code_from_filename("n0890_mary_jane_lee_tb_n {ThePornGarage}.mp4"),
-            "n0890")
+            "N0890")
 
     def test_the_site_name_licenses_a_number_further_in(self):
-        self.assertEqual(release_code_from_filename("Tokyo-Hot n0646 HD.wmv"), "n0646")
+        self.assertEqual(release_code_from_filename("Tokyo-Hot n0646 HD.wmv"), "N0646")
         self.assertEqual(
             release_code_from_filename("Tokyo Hot (n1042)(Rena Yamamoto)[1080p].wmv"),
-            "n1042")
+            "N1042")
         self.assertIsNone(release_code_from_filename("Tokyo-Hot.mp4"))
 
     def test_lookalikes_without_the_site_stay_out(self):

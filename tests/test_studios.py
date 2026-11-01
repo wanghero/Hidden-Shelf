@@ -139,6 +139,7 @@ def test_pipeline_organizes_into_english_folder(tmp_root: Path, fake_video):
 @pytest.mark.parametrize("code,expected", [
     ("n0610", "Tokyo-Hot"),
     ("N0610", "Tokyo-Hot"),
+    ("N0610", "Tokyo-Hot"),
     ("k1234", "Tokyo-Hot"),
     ("red-123", "Tokyo-Hot"),
     ("TOKYO-HOT-N0762", "Tokyo-Hot"),
@@ -166,22 +167,22 @@ def test_import_fills_studio_from_code_shape(tmp_root: Path):
     try:
         scan(connection, paths, ShelfConfig())
         ids = {row["code"]: int(row["id"]) for row in connection.execute("SELECT id,code FROM asset")}
-        write_owned_fields(connection, "asset", ids["n0611"], [FieldWrite("studio", "我的东热", USER_MANUAL)])
-        write_owned_fields(connection, "asset", ids["k1234"], [FieldWrite("studio", "東京熱", "auto:javbus")])
+        write_owned_fields(connection, "asset", ids["N0611"], [FieldWrite("studio", "我的东热", USER_MANUAL)])
+        write_owned_fields(connection, "asset", ids["K1234"], [FieldWrite("studio", "東京熱", "auto:javbus")])
         connection.commit()
         messages: list[str] = []
         import_local(connection, paths, progress=messages.append)
         studios = {row["code"]: (row["studio"], owner_of(row["field_owners"], "studio"))
                    for row in connection.execute("SELECT code, studio, field_owners FROM asset")}
-        assert studios["n0610"] == ("Tokyo-Hot", "auto:local")
+        assert studios["N0610"] == ("Tokyo-Hot", "auto:local")
         assert studios["HEYZO-1031"] == ("HEYZO", "auto:local")
-        assert studios["n0611"] == ("我的东热", USER_MANUAL)
-        assert studios["k1234"] == ("Tokyo-Hot", "auto:javbus")     # 规范写法由 canonicalize_existing 改，归属不动
+        assert studios["N0611"] == ("我的东热", USER_MANUAL)
+        assert studios["K1234"] == ("Tokyo-Hot", "auto:javbus")     # 规范写法由 canonicalize_existing 改，归属不动
         assert studios["ABP-758"] == (None, "") and studios["032715_001"] == (None, "")
         assert any("按番号形状补上厂牌：2 条" in line for line in messages)
         linked = {row[0]: row[1] for row in connection.execute(
             "SELECT ae.asset_id, e.canonical_name FROM asset_entity ae JOIN entity e ON e.id=ae.entity_id WHERE ae.role='studio'")}
-        assert linked[ids["n0610"]] == "Tokyo-Hot" and linked[ids["HEYZO-1031"]] == "HEYZO"
+        assert linked[ids["N0610"]] == "Tokyo-Hot" and linked[ids["HEYZO-1031"]] == "HEYZO"
         assert [r[0] for r in connection.execute("SELECT canonical_name FROM entity WHERE kind='studio' ORDER BY canonical_name")] == ["HEYZO", "Tokyo-Hot"]
         assert fill_studios_from_code(connection) == 0
     finally:

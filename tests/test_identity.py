@@ -8,7 +8,7 @@ from hidden_shelf.scrape.identity import identifies_code, validate_provider_code
 
 def test_validate_provider_code():
     assert validate_provider_code("abw-358") == "ABW-358"
-    assert validate_provider_code("n0646") == "n0646"
+    assert validate_provider_code("n0646") == "N0646"
     assert validate_provider_code("092415_001") == "092415_001"
     assert validate_provider_code("FC2-PPV-1234567") == "FC2-PPV-1234567"
     assert validate_provider_code("259luxu-1475") == "259LUXU-1475"

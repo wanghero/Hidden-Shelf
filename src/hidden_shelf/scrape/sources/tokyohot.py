@@ -90,7 +90,8 @@ class TokyoHotSource(SiteSource):
 
     def search_url(self, code: str) -> str:
         found = product_code(code)
-        return self.config.base_url + SEARCH_PATH.format(query=quote(found)) if found else ""
+        # 官网自己写小写 `n1161`，搜索对大小写不敏感；库里的规范写法是大写（v1.4.11），搜索词按站上的写法
+        return self.config.base_url + SEARCH_PATH.format(query=quote(found.lower())) if found else ""
 
     def _unrecognised(self) -> SourceFailure:
         return SourceFailure(FailureReason.NOT_FOUND, f"这个番号不是{self.config.label}的写法")

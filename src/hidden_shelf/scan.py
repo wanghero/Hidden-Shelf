@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import ShelfConfig
-from .field_owners import SCAN_FILENAME, FieldWrite, write_owned_fields
+from .field_owners import SCAN_FILENAME, FieldWrite, is_protected, owner_of, write_owned_fields
 from .paths import SHELF_DIR, ShelfPaths
 from .rules.codes import (
     is_amateur_code,
@@ -28,6 +28,7 @@ from .rules.codes import (
     part_marker,
     release_code_from_filename,
     same_release_code,
+    tokyo_hot_code,
 )
 from .rules.sidecars import ARTWORK, ARTWORK_DIRS, medium_of, sidecar_kind, video_stems
 from .studios import is_uncensored_studio
@@ -229,7 +230,13 @@ def _register_video(connection, rel: str, name: str, size: int, mtime: float, no
         write_owned_fields(connection, "asset", asset_id,
                            [FieldWrite("code", code, SCAN_FILENAME, require_empty=True)])
     # 派生列按库里现在的番号算：用户改过的番号在上一步没被覆盖，派生列要跟着它。
-    current, studio = connection.execute("SELECT code, studio FROM asset WHERE id=?", (asset_id,)).fetchone()
+    current, studio, owners = connection.execute(
+        "SELECT code, studio, field_owners FROM asset WHERE id=?", (asset_id,)).fetchone()
+    # 规范写法变过（v1.4.11 东京热编号由小写改大写）：自动写入的番号跟着改，用户改过的不碰。
+    canonical = tokyo_hot_code(current) if current else ""
+    if canonical and canonical != current and not is_protected(owner_of(owners, "code")):
+        connection.execute("UPDATE asset SET code=? WHERE id=?", (canonical, asset_id))
+        current = canonical
     key = normalise_code_key(current) if current else None
     connection.execute("UPDATE asset SET code_key=?,part=?,content_type=? WHERE id=?",
                        (key, part_marker(name) if current else "", content_type_of(name, current, studio), asset_id))

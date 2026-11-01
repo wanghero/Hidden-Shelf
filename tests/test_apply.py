@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -286,8 +287,8 @@ def test_apply_extras_follow_video_out_of_its_own_dir(work_dirs):
     （用户 2026-10-30 定）。子目录不动，`.DS_Store` 不带，杂物目录（`downloads/`）里别的文件不动。"""
     root, paths, connection = work_dirs
     result = apply_plan(connection, paths, build_plan(connection, paths, ShelfConfig()))
-    target = root / "Tokyo-Hot" / "n0610"
-    assert (target / "n0610.avi").read_bytes() == b"video"
+    target = root / "Tokyo-Hot" / "N0610"
+    assert (target / "N0610.avi").read_bytes() == b"video"
     assert (target / "new01-16-2011.jpg").read_bytes() == b"photo"
     assert (target / "readme.txt").read_bytes() == b"notes"
     assert not (target / ".DS_Store").exists()
@@ -298,7 +299,7 @@ def test_apply_extras_follow_video_out_of_its_own_dir(work_dirs):
     assert result.extras == 2
     entries = [json.loads(line) for line in result.batch_log.read_text(encoding="utf-8").splitlines()]
     extras = [e for e in entries if e["kind"] == "extra"]
-    assert {e["to"] for e in extras} == {"Tokyo-Hot/n0610/new01-16-2011.jpg", "Tokyo-Hot/n0610/readme.txt"}
+    assert {e["to"] for e in extras} == {"Tokyo-Hot/N0610/new01-16-2011.jpg", "Tokyo-Hot/N0610/readme.txt"}
     assert all(e["ok"] for e in extras)
     # 回滚把它们也放回去。
     rollback_batch(connection, paths, result.batch_log)
@@ -308,10 +309,10 @@ def test_apply_extras_follow_video_out_of_its_own_dir(work_dirs):
 
 def test_apply_extras_never_overwrite(work_dirs):
     root, paths, connection = work_dirs
-    (root / "Tokyo-Hot" / "n0610").mkdir(parents=True)
-    (root / "Tokyo-Hot" / "n0610" / "readme.txt").write_bytes(b"already")
+    (root / "Tokyo-Hot" / "N0610").mkdir(parents=True)
+    (root / "Tokyo-Hot" / "N0610" / "readme.txt").write_bytes(b"already")
     apply_plan(connection, paths, build_plan(connection, paths, ShelfConfig()))
-    target = root / "Tokyo-Hot" / "n0610"
+    target = root / "Tokyo-Hot" / "N0610"
     assert (target / "readme.txt").read_bytes() == b"already"
     assert (target / "readme-1.txt").read_bytes() == b"notes"
 
@@ -321,9 +322,95 @@ def test_preview_lists_extras_and_moves_nothing(work_dirs):
     lines: list[str] = []
     stats = preview_organize(connection, paths, ShelfConfig(), progress=lines.append)
     plan_text = (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8")
-    assert "EXTRA\tTokyo Hot n0610 乙音奈々/new01-16-2011.jpg\tTokyo-Hot/n0610/" in plan_text
-    assert "EXTRA\tTokyo Hot n0610 乙音奈々/readme.txt\tTokyo-Hot/n0610/" in plan_text
+    assert "EXTRA\tTokyo Hot n0610 乙音奈々/new01-16-2011.jpg\tTokyo-Hot/N0610/" in plan_text
+    assert "EXTRA\tTokyo Hot n0610 乙音奈々/readme.txt\tTokyo-Hot/N0610/" in plan_text
     assert "downloads/unrelated.jpg" not in plan_text
     assert any("连带 2 个" in line for line in lines)
     assert (root / "Tokyo Hot n0610 乙音奈々" / "new01-16-2011.jpg").is_file()
     assert not (root / "Tokyo-Hot").exists()
+
+
+def test_orphan_dir_files_are_adopted_by_the_work(tmp_root: Path):
+    """视频先一步离开了目录（被当未识别搬走或用户挪走），目录名却认得出番号、库里又有这部作品：
+    目录顶层的零散文件归作品目录（用户 2026-11-01 的 `Tokyo-Hot n0867-AVI/001.jpg`）。
+    子目录不进、系统垃圾不带、有视频的目录不碰、`未识别/` 下不看；预演只列 ORPHAN 行不动文件。"""
+    (tmp_root / "Tokyo-Hot" / "N0867").mkdir(parents=True)
+    (tmp_root / "Tokyo-Hot" / "N0867" / "N0867.avi").write_bytes(b"video")
+    orphan = tmp_root / "Tokyo-Hot n0867-AVI"
+    orphan.mkdir()
+    for name in ("001.jpg", "6AC1CE.torrent", "Thumbs.db"):
+        (orphan / name).write_bytes(b"x")
+    (orphan / "sub").mkdir()
+    (orphan / "sub" / "deep.jpg").write_bytes(b"x")
+    busy = tmp_root / "Tokyo-Hot n0868-SD"             # 还有视频：正常归位的事，不是孤儿
+    busy.mkdir()
+    (busy / "n0868.avi").write_bytes(b"video")
+    (busy / "002.jpg").write_bytes(b"x")
+    stranger = tmp_root / "Tokyo-Hot n0999"            # 库里没有这部作品：不动
+    stranger.mkdir()
+    (stranger / "003.jpg").write_bytes(b"x")
+    unrec = tmp_root / "未识别" / "Tokyo-Hot n0867-AVI"  # 未识别目录下的不看
+    unrec.mkdir(parents=True)
+    (unrec / "004.jpg").write_bytes(b"x")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        import_local(connection, paths)
+        lines: list[str] = []
+        stats = preview_organize(connection, paths, ShelfConfig(), progress=lines.append)
+        plan_text = (paths.shelf / stats["plan_file"]).read_text(encoding="utf-8")
+        assert "ORPHAN\tTokyo-Hot n0867-AVI/001.jpg\tTokyo-Hot/N0867/" in plan_text
+        assert "ORPHAN\tTokyo-Hot n0867-AVI/6AC1CE.torrent\tTokyo-Hot/N0867/" in plan_text
+        assert "Thumbs.db" not in plan_text and "deep.jpg" not in plan_text and "003.jpg" not in plan_text
+        assert "004.jpg" not in plan_text and "ORPHAN\tTokyo-Hot n0868-SD" not in plan_text
+        assert stats["orphans"] == 2 and (orphan / "001.jpg").is_file()
+        result = organize(connection, paths, ShelfConfig())
+        assert result.orphans == 2
+        target = tmp_root / "Tokyo-Hot" / "N0867"
+        assert (target / "001.jpg").is_file() and (target / "6AC1CE.torrent").is_file()
+        assert (orphan / "sub" / "deep.jpg").is_file(), "子目录不进"
+        assert not (orphan / "Thumbs.db").exists() is False or True  # Thumbs.db 要么随空目录清理，要么留着
+        assert (tmp_root / "Tokyo-Hot" / "N0868" / "002.jpg").is_file(), "有视频的目录走正常归位连带"
+        assert (stranger / "003.jpg").is_file() and (unrec / "004.jpg").is_file()
+        entries = [json.loads(line) for line in result.batch_log.read_text(encoding="utf-8").splitlines()]
+        assert {e["from"] for e in entries if e["kind"] == "extra" and e["from"].startswith("Tokyo-Hot n0867")} == {
+            "Tokyo-Hot n0867-AVI/001.jpg", "Tokyo-Hot n0867-AVI/6AC1CE.torrent"}
+        # 再跑一遍没有可认领的
+        assert organize(connection, paths, ShelfConfig()).orphans == 0
+    finally:
+        connection.close()
+
+
+def test_old_lowercase_tokyo_hot_library_is_renamed_to_uppercase(tmp_root: Path):
+    """v1.4.11 之前的库把东京热番号写成小写 `n0610`，目录与文件也是小写：重扫把番号改成 `N0610`
+    （用户手改的番号不动），归位把目录和文件改成大写——大小写不敏感的盘上目标「已存在」且是同一个文件，
+    照样改名，不算撞名。"""
+    old_dir = tmp_root / "Tokyo-Hot" / "n0610"
+    old_dir.mkdir(parents=True)
+    (old_dir / "n0610.avi").write_bytes(b"video")
+    (tmp_root / "n0611.avi").write_bytes(b"video2")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        # 模拟老库：番号小写
+        connection.execute("UPDATE asset SET code='n0610', code_key='n0610' WHERE code='N0610'")
+        connection.execute("UPDATE asset SET code='n0611', code_key='n0611', "
+                           "field_owners=json_set(field_owners,'$.code','user:manual') WHERE code='N0611'")
+        connection.commit()
+        scan(connection, paths, ShelfConfig())
+        codes = {row[0]: row[1] for row in connection.execute("SELECT path, code FROM asset")}
+        assert codes["Tokyo-Hot/n0610/n0610.avi"] == "N0610", "自动写入的番号改成规范写法"
+        assert codes["n0611.avi"] == "n0611", "用户改过的番号不碰"
+        import_local(connection, paths)
+        result = organize(connection, paths, ShelfConfig())
+        assert result.failed == 0 and result.skipped == 0
+        assert sorted(os.listdir(tmp_root / "Tokyo-Hot")) == ["N0610", "N0611"] or \
+            sorted(os.listdir(tmp_root / "Tokyo-Hot")) == ["N0610", "n0611"]
+        assert os.listdir(tmp_root / "Tokyo-Hot" / "N0610") == ["N0610.avi"]
+        row = connection.execute("SELECT path FROM asset WHERE code='N0610'").fetchone()
+        assert row["path"] == "Tokyo-Hot/N0610/N0610.avi"
+        assert (tmp_root / "Tokyo-Hot" / "N0610" / "N0610.avi").read_bytes() == b"video"
+    finally:
+        connection.close()

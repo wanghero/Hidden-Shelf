@@ -91,9 +91,9 @@ _KIRARI_BODY = r"MKB?D-S\d{2,4}"
 _KIRARI_CODE = re.compile(rf"^{_KIRARI_BODY}$", re.I)
 
 #: Tokyo-Hot 的编号没有厂牌字母段：`n1234`／`k1234` 是本编，`red-123` 是 Red Hot 支线。
-#: 规范写法取小写，不跟着别的番号大写——javbus 的作品页地址就是 `/n1234`，NeoAVDC
-#: （MIT，`src/main/number/parseNumber.ts` 的
-#: `TOKYOHOT_NUM_RE`）同样输出小写 `n####`。
+#: 规范写法与别的番号一样取大写 `N1234`／`K1234`／`RED-123`（用户 2026-11-01 定，v1.4.11；此前跟 peach、
+#: NeoAVDC 一样取小写）。官网搜索、javdb、avbase 对大小写不敏感；javbus 的作品页地址是 `/n1234`，
+#: 那一家拼地址时自己转小写。
 _TOKYO_HOT_BODY = re.compile(r"^(?:([nk])(\d{3,5})|red[-_]?(\d{2,4}))$", re.I)
 #: Tokyo-Hot 站名。编号本身没有字母段，只靠形态会把 `no0037_01`、`part 18` 一起认走，
 #: 所以站名出现时才允许在名字中段搜编号。
@@ -357,8 +357,8 @@ def is_repost_site_label(value: str | None) -> bool:
 def tokyo_hot_code(value: str | None) -> str:
     """Tokyo-Hot 编号的规范写法；不是这一形态返回空串。
 
-    补零到发行方自己的位数（本编四位、Red Hot 三位），大小写一律折成小写。
-    形态判据与小写这一点的出处见 `_TOKYO_HOT_BODY`。
+    补零到发行方自己的位数（本编四位、Red Hot 三位），大小写一律折成大写（`N0646`、`RED-123`）。
+    形态判据见 `_TOKYO_HOT_BODY`。
 
     站名写在编号前面的一并认（`TOKYO-HOT-N0762`）：账本里按目录名落的 `code` 就是这个
     写法，站名不剥掉的话它既不成番号形态，也进不了封面缓存键。
@@ -367,8 +367,8 @@ def tokyo_hot_code(value: str | None) -> str:
     if not shape:
         return ""
     if shape.group(3):
-        return f"red-{int(shape.group(3)):03d}"
-    return f"{shape.group(1).lower()}{int(shape.group(2)):04d}"
+        return f"RED-{int(shape.group(3)):03d}"
+    return f"{shape.group(1).upper()}{int(shape.group(2)):04d}"
 
 
 def is_code_body_stopword(value: str | None) -> bool:
@@ -404,7 +404,7 @@ def normalise_code_key(code: str | None) -> str:
 
     日期式番号（`_CODE_DATE`）例外：分隔符是片商标识，归一化原样保留，
     `092415_001` 与 `092415-001` 各算一个键、各存一张封面。
-    Tokyo-Hot 同样例外，它的规范写法是小写（见 `_TOKYO_HOT_BODY`）。
+    Tokyo-Hot 同样例外，走 `tokyo_hot_code` 补零（见 `_TOKYO_HOT_BODY`）。
     """
     raw = (code or "").upper().strip()
     tokyo = tokyo_hot_code(raw)

@@ -49,9 +49,9 @@ def test_config_registered_as_official_without_cookie():
 
 
 def test_product_code_and_search_url():
-    assert product_code("N1161") == "n1161" and product_code("RED-200") == "red-200" and product_code("k1300") == "k1300"
+    assert product_code("n1161") == "N1161" and product_code("red-200") == "RED-200" and product_code("k1300") == "K1300"
     assert product_code("ABW-358") == "" and product_code("040221-001") == ""
-    assert TokyoHotSource().search_url("N1161") == SEARCH_URL
+    assert TokyoHotSource().search_url("N1161") == SEARCH_URL, "搜索词按官网的小写写法"
     assert TokyoHotSource().search_url("ABW-358") == ""
 
 
@@ -69,7 +69,7 @@ def test_fetch_searches_then_opens_the_numbered_product_page():
     assert [url for url, _referer, _limit in transport.calls] == [SEARCH_URL, PRODUCT_URL]
     assert transport.calls[1][1] == SEARCH_URL, "作品页的 Referer 是搜索页"
     assert transport.calls[0][2] == 2 * 1024 * 1024
-    assert record.code == "n1161" and record.source_url == PRODUCT_URL
+    assert record.code == "N1161" and record.source_url == PRODUCT_URL
 
 
 def test_fetch_without_a_matching_result_is_a_miss():
@@ -82,7 +82,7 @@ def test_fetch_without_a_matching_result_is_a_miss():
 
 def test_search_result_must_carry_the_exact_code():
     listing = Page(SEARCH_URL, SEARCH)
-    assert TokyoHotSource().product_url(listing, "n1161") == PRODUCT_URL
+    assert TokyoHotSource().product_url(listing, "N1161") == PRODUCT_URL
     assert TokyoHotSource().product_url(listing, "n1162") == ""
     with pytest.raises(SourceFailure) as failed:
         TokyoHotSource().query("ABW-358", session=Session(serve({})))
@@ -91,7 +91,7 @@ def test_search_result_must_carry_the_exact_code():
 
 def test_parse_reads_every_field_from_the_product_page():
     payload = TokyoHotSource().parse(Page(PRODUCT_URL, PRODUCT), "n1161").payload()
-    assert payload["id"] == "n1161" and payload["title"] == "清楚令嬢鬼畜肉棒注入孕カン"
+    assert payload["id"] == "N1161" and payload["title"] == "清楚令嬢鬼畜肉棒注入孕カン"
     assert payload["maker"] == STUDIO == "Tokyo-Hot" and payload["label"] == "東熱"
     assert payload["series"] == "撮りおろし徹底陵辱ビデオ", "系列栏的几个 AI 重制标记不算系列"
     assert payload["release_date"] == "2016-06-24" and payload["runtime"] == 103.22

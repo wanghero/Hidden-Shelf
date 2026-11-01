@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import urllib.parse
 
-from ...rules.codes import same_release_code
+from ...rules.codes import same_release_code, tokyo_hot_code
 from ..transport import NotFound
 from .base import FailureReason, Page, Session, SiteConfig, SiteRecord, SiteSource, SourceFailure
 from .javdb_helpers import clean
@@ -39,7 +39,9 @@ class JavBusSource(SiteSource):
     DEFAULT = JAVBUS
 
     def work_url(self, code: str) -> str:
-        return f"{self.config.base_url}/{urllib.parse.quote(code)}"
+        # 东京热的作品页地址是小写 `/n1234`；库里的规范写法是大写（v1.4.11），到这里再转回去。
+        slug = code.lower() if tokyo_hot_code(code) else code
+        return f"{self.config.base_url}/{urllib.parse.quote(slug)}"
 
     def fetch(self, code: str, *, session: Session) -> Page:
         try:

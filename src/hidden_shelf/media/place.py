@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import os
+
 import posixpath
 import shutil
 import sqlite3
@@ -98,11 +100,26 @@ def place_images(connection: sqlite3.Connection, paths: ShelfPaths, config: Shel
                 "ON CONFLICT(path) DO UPDATE SET asset_id=excluded.asset_id, status=excluded.status",
                 (int(row["id"]), target_rel, kind, PLACED))
             result.copied += 1
-    # 视频没了或番号变了，留下的副本收回。
+    # 视频没了或番号变了，留下的副本收回。只差大小写的（番号 `n0860` 改成 `N0860`，大小写不敏感的盘上
+    # `n0860-cover.jpg` 和 `N0860-cover.jpg` 是同一个文件）不删，改成要的写法。
+    wanted_fold = {item.casefold(): item for item in wanted}
     for row in connection.execute("SELECT id, path FROM sidecar WHERE status=?", (PLACED,)).fetchall():
         if row["path"] in wanted:
             continue
         target = paths.absolute(row["path"])
+        twin = wanted_fold.get(str(row["path"]).casefold())
+        if twin is not None and target.is_file():
+            try:
+                same = os.path.samefile(target, paths.absolute(twin))
+            except OSError:
+                same = False
+            if same:
+                try:
+                    os.rename(target, paths.absolute(twin))
+                except OSError:
+                    pass
+                connection.execute("DELETE FROM sidecar WHERE id=?", (row["id"],))
+                continue
         if target.is_file():
             try:
                 target.unlink()
