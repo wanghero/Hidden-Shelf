@@ -5,9 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from hidden_shelf import db
+from hidden_shelf import db, entities
 from hidden_shelf.config import ShelfConfig
-from hidden_shelf.field_owners import USER_MANUAL, FieldWrite, owner_of, write_owned_fields
+from hidden_shelf.field_owners import (
+    USER_MANUAL,
+    FieldWrite,
+    auto_owner,
+    owner_of,
+    write_owned_fields,
+)
 from hidden_shelf.paths import SHELF_DIR, ShelfPaths
 from hidden_shelf.scan import scan
 
@@ -279,5 +285,102 @@ def test_dir_fallback_does_not_override_a_user_code(tmp_root: Path):
         scan(connection, paths, ShelfConfig())
         row = next(iter(_assets(connection).values()))
         assert row["code"] == "N0001" and owner_of(row["field_owners"], "code") == USER_MANUAL
+    finally:
+        connection.close()
+
+
+def test_a_code_range_directory_is_never_a_fallback(tmp_root: Path):
+    """用户 2026-11-02 的真实盘：`N1100-N1199/` 是收纳文件夹，区间头上的 N1100 不是这里任何一部片。
+
+    v1.4.14 把这个目录里 88 个纯数字文件名的片全盖成了 N1100，还顺着错番号刮了一遍资料。
+    """
+    _make(tmp_root, "N1100-N1199/1101.mp4", "N1100-N1199/1102.mp4", "N1100-N1199/1199.mp4",
+          "N0000-N0099/Tokyo Hot N0003.rm")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        result = scan(connection, paths, ShelfConfig())
+        codes = {path: row["code"] for path, row in _assets(connection).items()}
+        assert not codes["N1100-N1199/1101.mp4"]
+        assert not codes["N1100-N1199/1102.mp4"]
+        assert not codes["N1100-N1199/1199.mp4"]
+        assert result.unrecognized == 3
+        # 同一个区间目录里，文件名自己认得出的照常认——`.rm` 也是视频（v1.4.15）
+        assert codes["N0000-N0099/Tokyo Hot N0003.rm"] == "N0003"
+    finally:
+        connection.close()
+
+
+def test_dir_fallback_wants_one_unknown_video_or_real_disc_markers(tmp_root: Path):
+    """认不出番号的视频多于一个时，只有各带不重复分卷标记的才算同一部片的多碟。"""
+    _make(tmp_root,
+          # 广告垃圾混在作品目录里：4 个都认不出，谁都不能认领目录名（用户 2026-11-02 的 n1120）
+          "Tokyo-Hot n1120/美女裸聊.mp4", "Tokyo-Hot n1120/台湾UU聊天室.mp4",
+          "Tokyo-Hot n1120/荷官自拍.mp4", "Tokyo-Hot n1120/裸聊直播.mp4",
+          # 分卷：各带一个不重复的标记，是同一部片
+          "Tokyo-Hot n0500/_n0500-cd1.avi", "Tokyo-Hot n0500/_n0500-cd2.avi",
+          # 只有一个认不出的：照常用退路
+          "Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        codes = {path: row["code"] for path, row in _assets(connection).items()}
+        assert not codes["Tokyo-Hot n1120/美女裸聊.mp4"]
+        assert not codes["Tokyo-Hot n1120/裸聊直播.mp4"]
+        assert codes["Tokyo-Hot n0500/_n0500-cd1.avi"] == "N0500"
+        assert codes["Tokyo-Hot n0500/_n0500-cd2.avi"] == "N0500"
+        assert codes["Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi"] == "N0926"
+    finally:
+        connection.close()
+
+
+def test_a_dirname_guess_is_recomputed_and_its_scraped_data_revoked(tmp_root: Path):
+    """目录名猜的番号每次重算：这回猜不出了就撤掉它，连带撤掉顺着它刮来的资料。
+
+    撤销的边界：按文件来的（本地厂牌、用户手写）留着，联网刮来的和文件名带着错番号的
+    图片清掉。规则变过的盘（v1.4.14 → v1.4.15）就是靠这条自己恢复，不用手工动库。
+    """
+    work = "Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi"
+    _make(tmp_root, work)
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        row = _assets(connection)[work]
+        asset_id = row["id"]
+        assert row["code"] == "N0926" and owner_of(row["field_owners"], "code") == "scan:dirname"
+        # 模拟上一趟顺着这个番号刮回来的资料
+        write_owned_fields(connection, "asset", asset_id, [
+            FieldWrite("title", "東熱強制プレイに半泣き", auto_owner("tokyohot")),
+            FieldWrite("cover_file", "covers/N0926.jpg", auto_owner("tokyohot")),
+            FieldWrite("sheet_file", "sheets/N0926.jpg", auto_owner("frame")),
+            FieldWrite("studio", "Tokyo-Hot", auto_owner("local")),
+            FieldWrite("plot", "用户自己写的简介", USER_MANUAL),
+        ])
+        connection.execute("UPDATE asset SET scraped_at='2026-11-01T00:00:00+00:00' WHERE id=?", (asset_id,))
+        entities.link(connection, asset_id, entities.ensure_entity(connection, "performer", "松下栞"),
+                      "performer", auto_owner("tokyohot"))
+        entities.link(connection, asset_id, entities.ensure_entity(connection, "studio", "Tokyo-Hot"),
+                      "studio", "local")
+        connection.commit()
+
+        # 同目录多了一部认得出别的番号的片：退路有了相反证据，这回算不出番号
+        _make(tmp_root, "Tokyo-Hot n0926 東熱強制プレイに半泣き/N0601.mp4")
+        scan(connection, paths, ShelfConfig())
+
+        row = _assets(connection)[work]
+        assert not row["code"], "猜错的番号撤掉"
+        assert not row["code_key"] and row["content_type"] == "unrecognized"
+        assert "code" not in row["field_owners"], "归属也撤掉，不是留个指向空值的归属"
+        assert not row["title"], "联网刮来的标题跟着番号走"
+        assert not row["cover_file"], "联网封面同理"
+        assert not row["sheet_file"], "九宫格文件名带着错番号，哪怕是抽帧的也不能留"
+        assert row["studio"] == "Tokyo-Hot", "auto:local 是按文件来的，不碰"
+        assert row["plot"] == "用户自己写的简介", "用户写的一概不碰"
+        assert row["scraped_at"] is None, "撤了番号就不该再免于复问"
+        sources = {source for (source,) in connection.execute(
+            "SELECT source FROM asset_entity WHERE asset_id=?", (asset_id,))}
+        assert sources == {"local"}, "联网写的关联删掉，本地的留着"
     finally:
         connection.close()

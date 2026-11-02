@@ -44,6 +44,11 @@ _COLUMN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 #: 用户的判断，自动写入者不得覆盖。
 PROTECTED_PREFIXES: tuple[str, ...] = ("user:", "review:")
+
+#: 按文件来的自动写入身份：本地 NFO、本地旧封面、抽帧兜底。它们和番号认得对不对无关，
+#: 所以撤销一个猜错的番号时（`scan.revoke_dirname_guess`）不跟着撤；其余 `auto:<来源>`
+#: 都是顺着番号从网上刮来的，番号错了那些值也是别人的。
+LOCAL_AUTO_OWNERS: frozenset[str] = frozenset({"auto:nfo", "auto:local", "auto:frame"})
 _OWNER_KINDS = frozenset({"user", "review", "auto", "scan", "script"})
 
 
@@ -202,3 +207,41 @@ def write_owned_fields(connection, table: str, row_id: int, writes: Sequence[Fie
     )
     connection.execute(sql, [*assignment_params, *owner_params, *changed_params, int(row_id)])
     return outcome
+
+
+def clear_owned_fields(connection, table: str, row_id: int, fields: Sequence[str], *,
+                       owners_column: str = "field_owners",
+                       revision_column: str = "revision") -> list[str]:
+    """把若干字段置空并撤掉它们的归属，返回真的清掉的字段名。
+
+    `write_owned_fields` 的反面：那边是「谁能写」，这边是「把自动写入者写过的撤掉」。
+    `user:*`、`review:*` 的字段一概不碰——撤销自动写入不该把用户的判断一起抹掉；
+    本来就空的字段也跳过，免得白加修订号。
+
+    归属 JSON 在 Python 侧改完整写回（扫描是单进程，没有并发写同一行的场景），所以撤掉
+    的字段是真的从归属里消失、回到无主，而不是留个指向空值的归属。
+    """
+    table = _column(table)
+    owners_column = _column(owners_column)
+    revision_column = _column(revision_column)
+    names = [_column(field) for field in fields]
+    if not names:
+        return []
+    if len(set(names)) != len(names):
+        raise ValueError(f"同一字段在一次撤销里出现多次：{names}")
+    before = connection.execute(
+        f"SELECT {owners_column},{','.join(names)} FROM {table} WHERE id=?", (int(row_id),)).fetchone()
+    if before is None:
+        return []
+    owners = parse_owners(before[0])
+    cleared = [name for index, name in enumerate(names)
+               if not is_protected(owners.get(name, "")) and str(before[index + 1] or "").strip()]
+    if not cleared:
+        return []
+    for name in cleared:
+        owners.pop(name, None)
+    connection.execute(
+        f"UPDATE {table} SET {','.join(f'{name}=NULL' for name in cleared)},{owners_column}=?,"
+        f"{revision_column}=COALESCE({revision_column},0)+1 WHERE id=?",
+        (json.dumps(owners, ensure_ascii=False, sort_keys=True), int(row_id)))
+    return cleared

@@ -9,7 +9,9 @@
 
 番号优先从文件名认（`scan:filename`）；文件名认不出时退一步用所在目录名（`scan:dirname`，
 见 `dir_fallback_code`）——下载来的片常把番号只写在目录上，文件名却是 `_n0926.avi`、
-`net_n0972.avi` 这种前面黏了字的写法。
+`net_n0972.avi` 这种前面黏了字的写法。目录名猜出来的番号**每次扫描重算**：规则改了或目录
+变了就跟着改，猜错的连同顺着它刮来的资料一起撤（`revoke_dirname_guess`）。文件名认出的
+与用户改过的照旧只补空、不重算。
 """
 from __future__ import annotations
 
@@ -22,10 +24,21 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import ShelfConfig
-from .field_owners import SCAN_DIRNAME, SCAN_FILENAME, FieldWrite, is_protected, owner_of, write_owned_fields
+from .field_owners import (
+    LOCAL_AUTO_OWNERS,
+    SCAN_DIRNAME,
+    SCAN_FILENAME,
+    FieldWrite,
+    clear_owned_fields,
+    is_protected,
+    owner_of,
+    parse_owners,
+    write_owned_fields,
+)
 from .paths import SHELF_DIR, ShelfPaths
 from .rules.codes import (
     is_amateur_code,
+    is_code_range,
     is_jav_code,
     is_uncensored_release,
     normalise_code_key,
@@ -119,19 +132,81 @@ def dir_fallback_code(dir_name: str, video_names: list[str], *, patterns=()) -> 
     文件名前面黏着 `_`、`net_`、`com_` 这类字头，番号就不在它该在的位置上，整部片因此落进
     `未识别/`。目录名本身是认得出的，这里就用它。
 
-    只在目录里**没有相反证据**时才用：同目录另有视频的文件名认出了别的番号，说明这个目录
-    装的不止一部片，目录名代表不了谁，整个退路作废——宁可继续当未识别，也不给文件安错番号。
-    同目录里认出的番号与目录名一致（`n0867.avi` 和 `com_n0867.avi` 同在 `Tokyo-Hot n0867-AVI/`）
-    不算打架。用户自定义正则只对文件名生效，目录名走内置规则。
+    三道闸，任一不过整条退路作废——宁可继续当未识别，也不给文件安错番号：
+
+    1. **目录名是番号区间**（`N1100-N1199`，见 `is_code_range`）：那是收纳文件夹的名字，
+       区间头上的编号不是这里任何一部片的番号。
+    2. **有相反证据**：同目录另有视频的文件名认出了别的番号，说明这个目录装的不止一部片，
+       目录名代表不了谁。认出的番号与目录名一致（`n0867.avi` 和 `com_n0867.avi` 同在
+       `Tokyo-Hot n0867-AVI/`）不算打架。
+    3. **认不出番号的视频多于一个**：只有当它们各带一个不重复的分卷标记（`_n0500-cd1.avi`
+       与 `-cd2.avi`）才算同一部片的多碟；否则是一堆各不相干的片凑在一个目录里
+       （`N1100-N1199/1101.mp4 … 1199.mp4`、广告垃圾视频），谁都不能认领目录名。
+
+    v1.4.14 只有第 2 道闸，真实盘上把 `N1100-N1199/` 里 88 个纯数字文件名的片全盖成了
+    `N1100`：它们的文件名一个番号都认不出，在「相反证据」这条规则眼里就是没有反对意见。
+
+    用户自定义正则只对文件名生效，目录名走内置规则。
     """
+    if is_code_range(dir_name):
+        return ""
     wanted = release_code_from_text(dir_name)
     if not wanted:
         return ""
+    unknown: list[str] = []
     for name in video_names:
         found = release_code_from_filename(name, patterns=patterns)
-        if found and not same_release_code(found, wanted):
+        if not found:
+            unknown.append(name)
+        elif not same_release_code(found, wanted):
+            return ""
+    if len(unknown) > 1:
+        markers = [part_marker(name) for name in unknown]
+        if not all(markers) or len(set(markers)) != len(markers):
             return ""
     return wanted
+
+
+#: 跟着番号来的资料字段：番号撤了它们也不该留在这一行上。`code_key`、`part`、`content_type`
+#: 由 `_register_video` 末尾按新番号重算，不进这张单子。
+GUESSED_FIELDS = ("title", "original_title", "studio", "series", "release_date", "plot",
+                  "cover_file", "poster_file", "sheet_file")
+
+
+def revoke_dirname_guess(connection: sqlite3.Connection, asset_id: int, old_code: str) -> list[str]:
+    """撤掉一个猜错的目录名番号，以及顺着它写进来的资料；返回清掉的字段名（含 `code`）。
+
+    撤两类：联网刮削写的字段（`auto:<来源>`；`field_owners.LOCAL_AUTO_OWNERS` 里那几个
+    是按文件来的，本地 NFO、本地旧封面、抽帧兜底，跟番号对不对无关，不碰），以及图片列里
+    文件名就带着这个错番号的那几项——`covers/N1100.jpg` 是别人的封面，哪怕归属写着抽帧
+    兜底也不能留着。`user:*`、`review:*` 由 `clear_owned_fields` 挡住。
+
+    `scraped_at` 一并清掉：那个时间戳记的是「这个番号问过网了」，番号没了它就没有意义，
+    留着还会让这一行在 7 天内免于复问（`scrape.apply.should_scrape`）。
+
+    `code` 连归属一起撤，所以调用方紧接着写新番号时不会被 `require_empty` 挡住——这正是
+    「猜的值每次重算」要的效果：撤掉旧的猜测，再按这回的规则写。
+    """
+    row = connection.execute(
+        f"SELECT field_owners,{','.join(GUESSED_FIELDS)} FROM asset WHERE id=?", (int(asset_id),)).fetchone()
+    if row is None:
+        return []
+    owners = parse_owners(row["field_owners"])
+    key = (normalise_code_key(old_code) or old_code).casefold()
+    doomed = []
+    for field in GUESSED_FIELDS:
+        current = owners.get(field, "")
+        scraped = current.startswith("auto:") and current not in LOCAL_AUTO_OWNERS
+        tagged = field.endswith("_file") and key and key in str(row[field] or "").casefold()
+        if scraped or tagged:
+            doomed.append(field)
+    cleared = clear_owned_fields(connection, "asset", asset_id, ["code", *doomed])
+    connection.execute("UPDATE asset SET scraped_at=NULL,scrape_note=NULL WHERE id=?", (int(asset_id),))
+    marks = ",".join("?" * len(LOCAL_AUTO_OWNERS))
+    connection.execute(
+        f"DELETE FROM asset_entity WHERE asset_id=? AND source LIKE 'auto:%' AND source NOT IN ({marks})",
+        (int(asset_id), *sorted(LOCAL_AUTO_OWNERS)))
+    return cleared
 
 
 def _pair_sidecar(name: str, kind: str, videos: dict[str, int], codes: dict[int, str | None]) -> int | None:
@@ -266,6 +341,14 @@ def _register_video(connection, rel: str, name: str, size: int, mtime: float, no
     owner = SCAN_FILENAME
     if not code and fallback:
         code, owner = fallback, SCAN_DIRNAME
+    # 上回靠目录名猜的番号每次重算：规则改了（或目录改了）就该跟着改，这是它和
+    # `scan:filename` 的区别——猜的值不配享受 `require_empty` 那种「写进去就算数」。
+    guessed = connection.execute(
+        "SELECT code, field_owners FROM asset WHERE id=?", (asset_id,)).fetchone()
+    previous = str(guessed["code"] or "")
+    if (previous and owner_of(guessed["field_owners"], "code") == SCAN_DIRNAME
+            and str(code or "") != previous):
+        revoke_dirname_guess(connection, asset_id, previous)
     if code:
         write_owned_fields(connection, "asset", asset_id,
                            [FieldWrite("code", code, owner, require_empty=True)])

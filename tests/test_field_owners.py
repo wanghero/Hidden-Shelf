@@ -7,10 +7,12 @@ import sqlite3
 import pytest
 
 from hidden_shelf.field_owners import (
+    LOCAL_AUTO_OWNERS,
     SCAN_FILENAME,
     USER_MANUAL,
     FieldWrite,
     auto_owner,
+    clear_owned_fields,
     is_protected,
     owner_of,
     parse_owners,
@@ -155,3 +157,33 @@ def test_an_unknown_owner_category_is_refused(connection):
 def test_field_names_must_be_identifiers(connection):
     with pytest.raises(ValueError):
         write_owned_fields(connection, "asset", 1, [FieldWrite("title; DROP TABLE asset", "x", USER_MANUAL)])
+
+
+def test_clearing_fields_drops_the_value_and_the_owner(connection):
+    write_owned_fields(connection, "asset", 1, [
+        FieldWrite("title", "刮来的标题", auto_owner("tokyohot")),
+        FieldWrite("studio", "用户写的厂牌", USER_MANUAL),
+    ])
+    cleared = clear_owned_fields(connection, "asset", 1, ["title", "studio", "series"])
+    assert cleared == ["title"], "用户写的不碰，本来就空的不白加修订号"
+    assert row(connection)["title"] is None
+    owners = parse_owners(row(connection)["field_owners"])
+    assert "title" not in owners, "归属也撤掉，不是留个指向空值的归属"
+    assert owners["studio"] == USER_MANUAL
+    assert row(connection)["revision"] == 2, "写一次、撤一次"
+
+
+def test_clearing_nothing_touches_no_row(connection):
+    assert clear_owned_fields(connection, "asset", 1, []) == []
+    assert clear_owned_fields(connection, "asset", 1, ["title"]) == [], "本来就空"
+    assert clear_owned_fields(connection, "asset", 999, ["title"]) == [], "行不存在"
+    assert row(connection)["revision"] == 0
+    with pytest.raises(ValueError):
+        clear_owned_fields(connection, "asset", 1, ["title", "title"])
+    with pytest.raises(ValueError):
+        clear_owned_fields(connection, "asset", 1, ["title; DROP TABLE asset"])
+
+
+def test_local_auto_owners_are_the_file_borne_ones():
+    """按文件来的自动写入身份；撤销一个猜错的番号时不该跟着撤（见 `scan.revoke_dirname_guess`）。"""
+    assert LOCAL_AUTO_OWNERS == {auto_owner("nfo"), auto_owner("local"), auto_owner("frame")}

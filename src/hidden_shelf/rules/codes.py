@@ -17,8 +17,8 @@ from pathlib import PurePosixPath
 
 
 VIDEO_EXTENSIONS = frozenset({
-    '.mp4', '.m4v', '.mkv', '.avi', '.wmv', '.mov', '.ts', '.flv', '.rmvb', '.mpg',
-    '.m2ts', '.strm', '.iso',
+    '.mp4', '.m4v', '.mkv', '.avi', '.wmv', '.mov', '.ts', '.flv', '.rm', '.rmvb', '.mpg',
+    '.mpeg', '.mpe', '.m2ts', '.mts', '.asf', '.vob', '.divx', '.3gp', '.webm', '.strm', '.iso',
 })
 AUDIO_EXTENSIONS = frozenset({'.mp3', '.flac', '.wav', '.m4a', '.ogg', '.opus'})
 _EXTRA_SUFFIXES = {
@@ -104,8 +104,17 @@ _TOKYO_HOT_SITE_PREFIX = re.compile(rf"(?i)^{_TOKYO_HOT_SITE_TOKEN}[-_. ]*")
 #: 名字开头就是编号的写法（`n1025_rena_yamamoto_ss_n_fhd.wmv`）。本编固定四位，
 #: 放宽到三位就会把 `no0037`、`k12` 这类一起收进来。
 _TOKYO_HOT_HEAD = re.compile(r"^(?:[nk]\d{4}|red[-_]\d{3})(?![0-9])", re.I)
+#: 编号后面允许紧跟一个版本字母（`Tokyo Hot N0600C.H264.avi` 的 `C` 是中字版标记），
+#: 那个字母后面不能再有字母或数字——`k0123x4`、`no0037_01` 这类仍然不认。
 _TOKYO_HOT_INLINE = re.compile(
-    r"(?<![a-z0-9])((?:[nk]\d{3,5}|red[-_]?\d{2,4}))(?![a-z0-9])", re.I)
+    r"(?<![a-z0-9])((?:[nk]\d{3,5}|red[-_]?\d{2,4}))(?:[a-z](?![a-z0-9]))?(?![a-z0-9])", re.I)
+#: 番号区间（`N1100-N1199`、`ABP-001~ABP-010`）：两个同体系编号用连字符或波浪号连着。
+#: 收纳文件夹常这么起名，整段不是任何一部片的番号，见 `is_code_range`。
+_CODE_RANGE = re.compile(
+    r"(?i)(?<![a-z0-9])(?:"
+    r"(?:[nk]\d{3,5}|red[-_]?\d{2,4})\s*[-~]\s*(?:[nk]\d{3,5}|red[-_]?\d{2,4})"
+    r"|([a-z]{2,6})[-_ ]?\d{2,5}\s*[-~]\s*\1[-_ ]?\d{2,5}"
+    r")(?![a-z0-9])")
 
 #: 字母段 → 搜索扩展前缀。这里只生成查询词，不断言两种编号属于同一发行。
 #:
@@ -135,10 +144,12 @@ _RELEASE_PREFIX_ALIASES = {
     ("428", "SUKE"), ("435", "MFC"), ("476", "MLA"), ("762", "FKOS"),
 }
 _DMM_LABEL_PREFIX = re.compile(r"^H_(?=\d)")
+#: 番号提取时要剥掉的媒体后缀，直接由 `VIDEO_EXTENSIONS` 生成。两张表各写一份会漂移：
+#: v1.4.14 之前 `.rm` 只在这里有，于是 `Tokyo Hot N0003.rm` 的番号提得出来，却因为展示层
+#: 不认这个后缀而根本没被当成视频登记；反过来 `.asf`、`.vob` 只在那边有，`MEYD911.ASF`
+#: 就剥不掉后缀。
 _MEDIA_EXTENSION = re.compile(
-    r"\.(?:mp4|mkv|avi|wmv|mov|m4v|webm|ts|m2ts|mts|mpg|mpeg|flv|rm|rmvb|iso|strm)$",
-    re.I,
-)
+    r"\.(?:" + "|".join(sorted(ext[1:] for ext in VIDEO_EXTENSIONS)) + r")$", re.I)
 _PROMO_DOMAIN = re.compile(
     r"(?:www\.)?[a-z0-9][a-z0-9-]{1,30}\."
     r"(?:com|net|la|xyz|cc|me|top|vip|club|info|org|tv|app|co|pw|gg|cn)",
@@ -661,6 +672,21 @@ def release_code_from_product(value: str | None) -> str | None:
         code = normalise_code_key(raw)
         return code if is_jav_code(code) else None
     return release_code_from_text(raw)
+
+
+def is_code_range(value: str | None) -> bool:
+    """这段文字是不是番号区间，例如 `N1100-N1199`、`ABP-001~ABP-010`。
+
+    收纳文件夹常用区间起名。区间里的第一个编号形态上就是个番号（`N1100`），拿它当
+    目录里每部片的番号会把整个文件夹盖成同一部作品（v1.4.14 在真实盘上就这么错过），
+    所以认番号之前先把这种名字挡掉。
+
+    判据是「两个同体系编号夹着一个连字符或波浪号」：东京热那样没有字母段的编号两头
+    形态相同即可，有字母段的要求两头字母段一致（`ABP-001~ABP-010` 算，`ABP-758` 自己
+    不算，`n0500-cd1` 的 `cd1` 不成编号也不算）。
+    """
+    text = str(value or "").strip()
+    return bool(text) and _CODE_RANGE.search(text) is not None
 
 
 def release_code_from_text(value: str | None) -> str | None:

@@ -11,14 +11,13 @@ import pytest
 
 from hidden_shelf.rules.codes import (
     CODE_BODY_STOPWORDS,
-    REPOST_SITE_LABELS,
-    VIDEO_EXTENSIONS,
     code_query_variants,
     code_release_date,
     compact_label,
     compile_code_patterns,
     is_amateur_code,
     is_code_body_stopword,
+    is_code_range,
     is_jav_asset,
     is_jav_code,
     is_repost_site_label,
@@ -32,10 +31,12 @@ from hidden_shelf.rules.codes import (
     release_code_from_filename,
     release_code_from_text,
     release_identity,
+    REPOST_SITE_LABELS,
     same_release_code,
     scrapes_as_jav,
     strip_promo_markers,
     tokyo_hot_code,
+    VIDEO_EXTENSIONS,
     western_release_identity,
 )
 
@@ -237,6 +238,18 @@ class ExtractionTests(unittest.TestCase):
                     if suffix in VIDEO_EXTENSIONS:
                         self.assertEqual(jav_fallback_title(name, code), '')
 
+    def test_a_version_letter_right_after_the_编号_still_reads_as_tokyo_hot(self):
+        """用户 2026-11-02 的 `Tokyo Hot N0600C.H264.avi`：`C` 是中字版标记，不该挡住识别。"""
+        self.assertEqual(release_code_from_filename("Tokyo Hot N0600C.H264.avi"), "N0600")
+        self.assertEqual(release_code_from_filename("n0417C.XviD.avi"), "N0417")
+        self.assertEqual(release_code_from_filename("Tokyo Hot N0003.rm"), "N0003",
+                         ".rm 是视频后缀（v1.4.15）")
+        self.assertEqual(release_code_from_filename("Tokyo Hot N0018(冴木)--赛车女郎.rm"), "N0018")
+        # 编号后面跟着字母又跟着数字的仍然不认：那不是版本标记
+        for name in ("Tokyo Hot k0123x4.avi", "tokyo-hot no0037_01.avi", "Tokyo Hot part 18.avi"):
+            with self.subTest(name=name):
+                self.assertIsNone(release_code_from_filename(name))
+
     def test_media_suffixes_preserve_volumes_and_exclude_camera_names(self):
         for suffix in ('.mpg', '.flv', '.rmvb', '.m2ts', '.iso', '.strm'):
             with self.subTest(suffix=suffix):
@@ -414,6 +427,22 @@ class TokyoHotShapeTests(unittest.TestCase):
         self.assertEqual(
             jav_fallback_title("n1025_rena_yamamoto_ss_n_fhd.wmv", "n1025"),
             "rena yamamoto ss n")
+
+
+class CodeRangeTests(unittest.TestCase):
+    """番号区间是收纳文件夹的名字，不是任何一部片的番号（用户 2026-11-02 的 `N1100-N1199/`）。"""
+
+    def test_two_编号_joined_by_a_dash_or_tilde_is_a_range(self):
+        for text in ("N1100-N1199", "N0000-N0099", "N0900-N0999", "RED-100~RED-199",
+                     "Tokyo Hot N1100-N1199", "ABP-001~ABP-010"):
+            with self.subTest(text=text):
+                self.assertTrue(is_code_range(text))
+
+    def test_a_single_code_or_a_disc_marker_is_not_a_range(self):
+        for text in ("", "ABP-758", "N0926", "Tokyo-Hot n0926 東熱強制プレイに半泣き",
+                     "Tokyo-Hot n1120", "n0500-cd1", "N0867-AVI", "E000-1100"):
+            with self.subTest(text=text):
+                self.assertFalse(is_code_range(text))
 
 
 class DeliveryFilenameTests(unittest.TestCase):
