@@ -71,7 +71,10 @@ def process_assets(connection: sqlite3.Connection, paths: ShelfPaths, *,
     for index, row in enumerate(rows, 1):
         video = paths.absolute(row["path"])
         if not video.is_file():
-            continue
+            # 老盘上可能是分解写法存着的，Linux 上两种写法不互通（见 `paths.nfc`）。
+            video = paths.decomposed(row["path"])
+            if not video.is_file():
+                continue
         label = row["code_key"] or row["name"]
         # 1. 探测
         if row["probed_at"] is None:

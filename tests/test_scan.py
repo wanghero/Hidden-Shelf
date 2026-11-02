@@ -384,3 +384,39 @@ def test_a_dirname_guess_is_recomputed_and_its_scraped_data_revoked(tmp_root: Pa
         assert sources == {"local"}, "联网写的关联删掉，本地的留着"
     finally:
         connection.close()
+
+
+def test_a_name_that_comes_back_decomposed_is_still_the_same_asset(tmp_root: Path):
+    """macOS 把文件名分解后交回来（`が` → `か` + 浊音符），那还是上一趟那部片，不是新片。
+
+    v1.4.16 及之前这一行会被判「消失」、另建一条没有资料的新行：真实盘上 253 个作品这样丢了
+    标题、演员与 `scraped_at`，旧行还占着 `asset.path`，让归位报 UNIQUE 冲突。见 `paths.nfc`。
+    """
+    import unicodedata
+    directory = "Tokyo-Hot/N0017 こんな娘が生カン・中出し!-滝沢美鈴"
+    # 盘上按分解写法建目录与文件——macOS 读目录时交给程序的就是这个样子。
+    decomposed = unicodedata.normalize("NFD", directory)
+    (tmp_root / decomposed).mkdir(parents=True)
+    (tmp_root / decomposed / "N0017.avi").write_bytes(b"x" * 16)
+    connection = db.connect(ShelfPaths(tmp_root))
+    paths = ShelfPaths(tmp_root)
+    try:
+        # 上一趟留下的那条：合成写法，刮好了资料，这一趟它的文件「看起来」换了个名字。
+        asset_id = connection.execute(
+            "INSERT INTO asset(path,name,medium,code,code_key,title,scraped_at,vanished,field_owners) "
+            "VALUES(?,?,'video','N0017','N0017','こんな娘が生カン・中出し!','2026-11-01T00:00:00+00:00',1,'{}')",
+            (f"{directory}/N0017.avi", "N0017.avi")).lastrowid
+        connection.commit()
+
+        result = scan(connection, paths, ShelfConfig())
+
+        rows = connection.execute("SELECT * FROM asset WHERE medium='video'").fetchall()
+        assert len(rows) == 1, "不该多出一条记录"
+        row = rows[0]
+        assert int(row["id"]) == asset_id and row["vanished"] == 0
+        assert row["title"] == "こんな娘が生カン・中出し!" and row["scraped_at"] == "2026-11-01T00:00:00+00:00"
+        assert row["path"] == f"{directory}/N0017.avi" == unicodedata.normalize("NFC", row["path"])
+        assert row["name"] == "N0017.avi" and row["code"] == "N0017"
+        assert result.added == 0 and result.vanished == 0
+    finally:
+        connection.close()

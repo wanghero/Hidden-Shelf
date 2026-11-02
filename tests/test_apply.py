@@ -414,3 +414,37 @@ def test_old_lowercase_tokyo_hot_library_is_renamed_to_uppercase(tmp_root: Path)
         assert (tmp_root / "Tokyo-Hot" / "N0610" / "N0610.avi").read_bytes() == b"video"
     finally:
         connection.close()
+
+
+def test_a_vanished_row_squatting_on_the_target_makes_way(disk):
+    """目标路径被一条已消失的记录占着时，搬迁照样成功：那条并进来，资料不丢。
+
+    2026-11-02 的真实盘上这一步整整失败了 207 次（`UNIQUE constraint failed: asset.path`，文件
+    被改回原名、整次归位白做）：上一趟归好位的记录因为文件名写法变了被判消失，却还占着那个
+    路径（见 `paths.nfc`）。
+    """
+    root, paths, connection = disk
+    asset = connection.execute("SELECT id,path FROM asset WHERE path='a/ABP-758.mp4'").fetchone()
+    plan = build_plan(connection, paths, ShelfConfig())
+    target = next(row.target_path for row in plan.rows if int(row.asset_id) == int(asset["id"]))
+    # 上一趟留下的记录：就坐在这次要搬进去的位置上，文件早已不在那儿，带着刮好的资料。
+    squatter = connection.execute(
+        "INSERT INTO asset(path,name,medium,code,code_key,title,plot,scraped_at,vanished,field_owners) "
+        "VALUES(?,?,'video','ABP-758','ABP-758','上一趟刮到的标题','上一趟刮到的简介',"
+        "'2026-11-01T00:00:00+00:00',1,?)",
+        (target, os.path.basename(target), json.dumps({"title": "auto:javdb", "plot": "auto:javdb"}))).lastrowid
+    connection.commit()
+
+    result = apply_plan(connection, paths, plan)
+
+    assert result.failed == 0 and result.moved == 4
+    assert (root / target).is_file()
+    rows = connection.execute("SELECT * FROM asset WHERE code_key='ABP-758'").fetchall()
+    assert [int(row["id"]) for row in rows] == [int(asset["id"])], "占位的那条应该并进来并消失"
+    row = rows[0]
+    assert row["path"] == target and row["vanished"] == 0
+    # 本地 NFO 写的标题（`auto:nfo`）不让位，简介那边空着才从占位者补上。
+    assert row["title"] == "甲" and json.loads(row["field_owners"])["title"] == "auto:nfo"
+    assert row["plot"] == "上一趟刮到的简介" and json.loads(row["field_owners"])["plot"] == "auto:javdb"
+    assert row["scraped_at"] == "2026-11-01T00:00:00+00:00"
+    assert connection.execute("SELECT count(*) FROM asset WHERE id=?", (squatter,)).fetchone()[0] == 0

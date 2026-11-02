@@ -35,7 +35,7 @@ from .field_owners import (
     parse_owners,
     write_owned_fields,
 )
-from .paths import SHELF_DIR, ShelfPaths
+from .paths import SHELF_DIR, ShelfPaths, nfc
 from .rules.codes import (
     is_amateur_code,
     is_code_range,
@@ -248,22 +248,23 @@ def scan(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig,
     for directory, files, _dirs in _walk(paths.root):
         rel_dir = paths.relative(directory) if directory != paths.root else ""
         progress(f"扫描 {rel_dir or '/'}")
-        names = [entry.name for entry in files]
+        # 名字一进来就归一成 NFC：番号识别、分卷与附属文件配对、入库全用同一种写法（见 `paths.nfc`）。
+        names = [nfc(entry.name) for entry in files]
         stems = video_stems(names)
-        artwork_dir = (directory.name.casefold() in ARTWORK_DIRS
+        artwork_dir = (nfc(directory.name).casefold() in ARTWORK_DIRS
                        and bool(parent_videos.get(directory.parent)))
         videos: dict[str, int] = {}
         codes: dict[int, str | None] = {}
         pending_sidecars: list[tuple[str, str]] = []
-        video_names = [entry.name for entry in files
+        video_names = [nfc(entry.name) for entry in files
                        if medium_of(entry.name) == "video"
                        and os.path.splitext(entry.name)[0].casefold() in stems]
         # 盘根不作退路：根目录名是盘名，它认出来的番号会盖到散在根上的每部片。
         fallback = ("" if directory == paths.root
-                    else dir_fallback_code(directory.name, video_names, patterns=patterns))
+                    else dir_fallback_code(nfc(directory.name), video_names, patterns=patterns))
 
         for entry in files:
-            name = entry.name
+            name = nfc(entry.name)
             rel = paths.relative(Path(entry.path))
             medium = medium_of(name)
             if medium == "video" and os.path.splitext(name)[0].casefold() in stems:

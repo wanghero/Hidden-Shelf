@@ -2,11 +2,15 @@
 
 全部派生产物都在 `<盘根>/HiddenShelf/` 下，媒体目录旁不写任何附属文件。库里的 `asset.path`
 是相对盘根目录的 POSIX 串，`relative()` / `absolute()` 负责两头转换并拦住越界。
+
+进库的那一串一律是 **NFC**（`nfc()`，见那里的注释）：macOS 把文件名以分解形式交给程序，
+而程序写盘时用的是刮削来的合成形式，不归一的话同一个目录名在库里会有两种字节。
 """
 from __future__ import annotations
 
 import errno
 import os
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -18,6 +22,21 @@ SHELF_DIR = "HiddenShelf"
 LEGACY_SHELF_DIR = ".shelf"
 #: 认不出番号的视频集中搬到这个目录（设置开关可关）。
 UNRECOGNIZED_DIR = "未识别"
+
+
+def nfc(text: str) -> str:
+    """文件名、路径串的统一写法：Unicode 合成形式（NFC）。
+
+    macOS 读目录时把文件名**分解**后交给程序：`が` 回来是 `か` + 浊音符两个码位（NFD）。程序
+    自己写盘用的却是刮削来的标题，网页给的是合成形式（NFC，`が` 一个码位）。两种字节在文件
+    系统上指同一个文件（APFS 与 macOS 的 SMB 客户端比较时都忽略这个差别），但在 SQLite 的
+    `asset.path UNIQUE` 眼里是两个不同的值——于是重扫时旧行对不上、被当成消失，另建一条没有
+    任何资料的新行。2026-11-02 的真实盘上 253 个作品这样丢了资料，而且旧行还占着那个 path，
+    让归位报 `UNIQUE constraint failed: asset.path`（207 个）或「目标已存在」（53 个）。
+
+    所以凡是进库的名字都从这里过一遍。反过来不用管：NFC 串照样打得开 NFD 存着的文件。
+    """
+    return unicodedata.normalize("NFC", text)
 
 
 @dataclass(frozen=True)
@@ -115,7 +134,7 @@ class ShelfPaths:
             rel = Path(path).relative_to(self.root)
         except ValueError:
             raise ValueError(f"路径不在盘根目录下：{path}") from None
-        return rel.as_posix()
+        return nfc(rel.as_posix())
 
     def shelf_relative(self, path: Path) -> str:
         """`path` 相对资料目录 `HiddenShelf/` 的 POSIX 串（库里 `cover_file` 等列用这种写法）。"""
@@ -123,7 +142,16 @@ class ShelfPaths:
             rel = Path(path).relative_to(self.shelf)
         except ValueError:
             raise ValueError(f"路径不在 {SHELF_DIR} 下：{path}") from None
-        return rel.as_posix()
+        return nfc(rel.as_posix())
+
+    def decomposed(self, rel: str) -> Path:
+        """同一个相对串的**分解写法**（NFD）的绝对路径。
+
+        库里一律存合成写法（见 `nfc`）。macOS 与 Windows 上两种写法打得开同一个文件，Linux 上
+        打不开——所以凡是「按库里的路径找不到这个文件」的地方，再按这个写法找一次，老盘上分解
+        写法存着的文件才不会在 Linux 上凭空消失。
+        """
+        return self.absolute(unicodedata.normalize("NFD", rel))
 
     def absolute(self, rel: str) -> Path:
         """把库里的相对 POSIX 串还原成绝对路径；带 `..` 或绝对写法的拒绝。"""

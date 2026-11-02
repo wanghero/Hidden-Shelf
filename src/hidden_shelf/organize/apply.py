@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..config import ShelfConfig
+from ..db import merge_assets
 from ..paths import SHELF_DIR, UNRECOGNIZED_DIR, ShelfPaths
 from ..rules.codes import normalise_code_key, release_code_from_text, same_release_code
 from ..rules.sidecars import medium_of
@@ -148,7 +149,22 @@ def backup_database(paths: ShelfPaths, connection: sqlite3.Connection | None = N
     return destination
 
 
+def _evict_vanished_squatter(connection: sqlite3.Connection, asset_id: int, new_path: str) -> None:
+    """目标路径被另一条**已消失**的记录占着时，把那条并进要搬进来的这一条（`db.merge_assets`）。
+
+    已消失就意味着那条记录的文件早不在那个位置上了，而 `asset.path` 是唯一的：不让位，这次搬迁
+    会在改库时撞 UNIQUE、文件被改回原名，整次归位白做——2026-11-02 的真实盘上一次 207 个。
+    还没消失的占位者不动，那是真有另一个文件在那儿，由 `SKIP_TARGET_EXISTS` 在计划阶段挡住。
+    """
+    squatter = connection.execute(
+        "SELECT id FROM asset WHERE path=? AND id<>? AND vanished=1",
+        (new_path, int(asset_id))).fetchone()
+    if squatter is not None:
+        merge_assets(connection, int(asset_id), int(squatter["id"]))
+
+
 def _update_row(connection: sqlite3.Connection, asset_id: int, old_path: str, new_path: str) -> int:
+    _evict_vanished_squatter(connection, asset_id, new_path)
     return connection.execute(
         "UPDATE asset SET path=?,name=? WHERE id=? AND path=?",
         (new_path, posixpath.basename(new_path), int(asset_id), old_path)).rowcount
@@ -178,8 +194,8 @@ def _fix_dir_case(root: Path, directory: Path) -> None:
         current = wanted
 
 
-def _rename(paths: ShelfPaths, old_rel: str, new_rel: str) -> None:
-    source = paths.absolute(old_rel)
+def _rename(paths: ShelfPaths, old_rel: str, new_rel: str, *, source: Path | None = None) -> None:
+    source = source if source is not None else paths.absolute(old_rel)
     target = paths.absolute(new_rel)
     target.parent.mkdir(parents=True, exist_ok=True)
     _fix_dir_case(paths.root, target.parent)
@@ -380,7 +396,10 @@ def _move_one(connection, paths, asset_id: int, old_path: str, new_path: str) ->
     source = paths.absolute(old_path)
     target = paths.absolute(new_path)
     if not source.exists():
-        return "源文件不存在"
+        # 老盘上可能是分解写法存着的，Linux 上两种写法不互通（见 `paths.nfc`）。
+        source = paths.decomposed(old_path)
+        if not source.exists():
+            return "源文件不存在"
     if target.exists():
         try:
             same = os.path.samefile(source, target)
@@ -389,7 +408,7 @@ def _move_one(connection, paths, asset_id: int, old_path: str, new_path: str) ->
         if not same:
             return SKIP_TARGET_EXISTS
     try:
-        _rename(paths, old_path, new_path)
+        _rename(paths, old_path, new_path, source=source)
     except OSError as error:
         return f"改名失败：{error.strerror or error}"
     try:
