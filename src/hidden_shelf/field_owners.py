@@ -11,6 +11,7 @@ AGPL-3.0-or-later）。改动：去掉乐观并发（`check_revision` / `Revisio
 - `review:<来源>`    用户批准了某个来源的候选（本项目暂无复核界面，保留类别）；
 - `auto:<来源>`      自动落库（`auto:nfo`、`auto:local`、`auto:frame`、计划 2 的各来源）；
 - `scan:filename`    扫描从文件名推导；
+- `scan:dirname`     扫描从所在目录名推导（文件名认不出时的退路）；
 - `script:<脚本名>`  维护脚本批量写入。
 
 覆盖规则只有一条：`user:*` 与 `review:*` 承载用户的判断，自动写入者一概不许改；
@@ -32,6 +33,9 @@ USER_MANUAL = "user:manual"
 
 #: 扫描从文件名推导出的取值。
 SCAN_FILENAME = "scan:filename"
+
+#: 扫描从所在目录名推导出的取值（文件名认不出时的退路，见 `scan.dir_fallback_code`）。
+SCAN_DIRNAME = "scan:dirname"
 
 #: 归属串里标识那一段的合法形状。
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9_-]*")

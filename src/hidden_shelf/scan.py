@@ -6,6 +6,10 @@
 
 遍历用显式栈加 `os.scandir`（peach `scan._walk` 的思路），每进一个目录报一次进度。
 跳过资料目录 `HiddenShelf/` 与系统垃圾；`未识别/` 照常遍历，认不出番号的标 `content_type='unrecognized'`。
+
+番号优先从文件名认（`scan:filename`）；文件名认不出时退一步用所在目录名（`scan:dirname`，
+见 `dir_fallback_code`）——下载来的片常把番号只写在目录上，文件名却是 `_n0926.avi`、
+`net_n0972.avi` 这种前面黏了字的写法。
 """
 from __future__ import annotations
 
@@ -18,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import ShelfConfig
-from .field_owners import SCAN_FILENAME, FieldWrite, is_protected, owner_of, write_owned_fields
+from .field_owners import SCAN_DIRNAME, SCAN_FILENAME, FieldWrite, is_protected, owner_of, write_owned_fields
 from .paths import SHELF_DIR, ShelfPaths
 from .rules.codes import (
     is_amateur_code,
@@ -27,6 +31,7 @@ from .rules.codes import (
     normalise_code_key,
     part_marker,
     release_code_from_filename,
+    release_code_from_text,
     same_release_code,
     tokyo_hot_code,
 )
@@ -107,6 +112,28 @@ def _walk(root: Path):
         yield directory, sorted(files, key=lambda entry: entry.name), dirs
 
 
+def dir_fallback_code(dir_name: str, video_names: list[str], *, patterns=()) -> str:
+    """目录名里的番号，用作文件名认不出时的退路；用不上回空串。
+
+    下载来的片常把番号只写在目录上（`Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi`），
+    文件名前面黏着 `_`、`net_`、`com_` 这类字头，番号就不在它该在的位置上，整部片因此落进
+    `未识别/`。目录名本身是认得出的，这里就用它。
+
+    只在目录里**没有相反证据**时才用：同目录另有视频的文件名认出了别的番号，说明这个目录
+    装的不止一部片，目录名代表不了谁，整个退路作废——宁可继续当未识别，也不给文件安错番号。
+    同目录里认出的番号与目录名一致（`n0867.avi` 和 `com_n0867.avi` 同在 `Tokyo-Hot n0867-AVI/`）
+    不算打架。用户自定义正则只对文件名生效，目录名走内置规则。
+    """
+    wanted = release_code_from_text(dir_name)
+    if not wanted:
+        return ""
+    for name in video_names:
+        found = release_code_from_filename(name, patterns=patterns)
+        if found and not same_release_code(found, wanted):
+            return ""
+    return wanted
+
+
 def _pair_sidecar(name: str, kind: str, videos: dict[str, int], codes: dict[int, str | None]) -> int | None:
     """附属文件配到同目录哪部视频：同主名 > 去掉图片后缀的主名 > 唯一视频 > 番号同一。"""
     stem = os.path.splitext(name)[0]
@@ -153,6 +180,12 @@ def scan(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig,
         videos: dict[str, int] = {}
         codes: dict[int, str | None] = {}
         pending_sidecars: list[tuple[str, str]] = []
+        video_names = [entry.name for entry in files
+                       if medium_of(entry.name) == "video"
+                       and os.path.splitext(entry.name)[0].casefold() in stems]
+        # 盘根不作退路：根目录名是盘名，它认出来的番号会盖到散在根上的每部片。
+        fallback = ("" if directory == paths.root
+                    else dir_fallback_code(directory.name, video_names, patterns=patterns))
 
         for entry in files:
             name = entry.name
@@ -164,7 +197,8 @@ def scan(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig,
                 except OSError:
                     continue
                 asset_id, added, updated, code = _register_video(
-                    connection, rel, name, stat.st_size, stat.st_mtime, now, existing, patterns)
+                    connection, rel, name, stat.st_size, stat.st_mtime, now, existing, patterns,
+                    fallback=fallback)
                 seen_ids.add(asset_id)
                 videos[os.path.splitext(name)[0].casefold()] = asset_id
                 codes[asset_id] = code
@@ -207,8 +241,11 @@ def scan(connection: sqlite3.Connection, paths: ShelfPaths, config: ShelfConfig,
 
 
 def _register_video(connection, rel: str, name: str, size: int, mtime: float, now: str,
-                    existing: dict, patterns) -> tuple[int, int, int, str | None]:
-    """登记一部视频，返回 `(asset_id, 新增数, 更新数, 现在的番号)`。"""
+                    existing: dict, patterns, *, fallback: str = "") -> tuple[int, int, int, str | None]:
+    """登记一部视频，返回 `(asset_id, 新增数, 更新数, 现在的番号)`。
+
+    `fallback` 是所在目录名认出的番号（`dir_fallback_code`），只在文件名认不出时用。
+    """
     known = existing.get(rel)
     if known is None:
         cursor = connection.execute(
@@ -226,9 +263,12 @@ def _register_video(connection, rel: str, name: str, size: int, mtime: float, no
             connection.execute("UPDATE asset SET probed_at=NULL WHERE id=?", (asset_id,))
         added, updated = 0, int(changed)
     code = release_code_from_filename(name, patterns=patterns)
+    owner = SCAN_FILENAME
+    if not code and fallback:
+        code, owner = fallback, SCAN_DIRNAME
     if code:
         write_owned_fields(connection, "asset", asset_id,
-                           [FieldWrite("code", code, SCAN_FILENAME, require_empty=True)])
+                           [FieldWrite("code", code, owner, require_empty=True)])
     # 派生列按库里现在的番号算：用户改过的番号在上一步没被覆盖，派生列要跟着它。
     current, studio, owners = connection.execute(
         "SELECT code, studio, field_owners FROM asset WHERE id=?", (asset_id,)).fetchone()

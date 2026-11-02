@@ -187,3 +187,97 @@ def test_scan_skips_visible_shelf_dir(tmp_root: Path):
             assert not any(row["path"].startswith(f"{SHELF_DIR}/") for row in rows), table
     finally:
         connection.close()
+
+
+def _make(root: Path, *rels: str) -> None:
+    for rel in rels:
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"0" * 16)
+
+
+def test_dir_name_is_the_fallback_when_the_file_name_hides_the_code(tmp_root: Path):
+    """用户 2026-11-01 的 `Tokyo-Hot n0926 …/_n0926.avi`：番号只写在目录上，文件名前黏了字头。"""
+    _make(tmp_root,
+          "Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi",
+          "Tokyo-Hot n0972-SD/net_n0972.avi",
+          # 同目录另一部认得出，番号与目录名一致：不算打架，认不出的那个照样补上
+          "Tokyo-Hot n0867-AVI/n0867.avi", "Tokyo-Hot n0867-AVI/com_n0867.avi",
+          # 分卷：两个都认不出，目录名给同一个番号
+          "Tokyo-Hot n0500/_n0500-cd1.avi", "Tokyo-Hot n0500/_n0500-cd2.avi")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        assets = _assets(connection)
+        codes = {path: row["code"] for path, row in assets.items()}
+        assert codes["Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi"] == "N0926"
+        assert codes["Tokyo-Hot n0972-SD/net_n0972.avi"] == "N0972"
+        assert codes["Tokyo-Hot n0867-AVI/com_n0867.avi"] == "N0867"
+        assert codes["Tokyo-Hot n0500/_n0500-cd1.avi"] == codes["Tokyo-Hot n0500/_n0500-cd2.avi"] == "N0500"
+        # 归属分得清是从哪儿来的
+        assert owner_of(assets["Tokyo-Hot n0867-AVI/n0867.avi"]["field_owners"], "code") == "scan:filename"
+        assert owner_of(assets["Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi"]["field_owners"], "code") == "scan:dirname"
+        # 分卷号仍按文件名算
+        assert assets["Tokyo-Hot n0500/_n0500-cd2.avi"]["part"] == "2"
+    finally:
+        connection.close()
+
+
+def test_dir_fallback_is_dropped_when_the_directory_holds_another_code(tmp_root: Path):
+    """目录里另有视频认出了别的番号，说明这目录装的不止一部片，目录名代表不了谁。"""
+    _make(tmp_root, "N0600 乱放的目录/N0601.mp4", "N0600 乱放的目录/随手拍.avi",
+          "没有番号的目录/随手拍2.avi")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        result = scan(connection, paths, ShelfConfig())
+        codes = {path: row["code"] for path, row in _assets(connection).items()}
+        assert codes["N0600 乱放的目录/N0601.mp4"] == "N0601", "文件名认出来的不受影响"
+        assert not codes["N0600 乱放的目录/随手拍.avi"], "退路作废，宁可当未识别"
+        assert not codes["没有番号的目录/随手拍2.avi"]
+        assert result.unrecognized == 2
+    finally:
+        connection.close()
+
+
+def test_dir_fallback_never_uses_the_disk_root_name(tmp_root: Path):
+    """盘根目录名是盘名；拿它当番号会盖到散在根上的每部片。"""
+    root = tmp_root / "N0700"
+    root.mkdir()
+    _make(root, "随手拍.avi")
+    paths = ShelfPaths(root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        assert not _assets(connection)["随手拍.avi"]["code"]
+    finally:
+        connection.close()
+
+
+def test_a_work_already_in_unrecognized_is_recognised_on_the_next_scan(tmp_root: Path):
+    """`未识别/` 里的目录名照样认：上一趟被搬进去的片，重扫就能认出番号、下一次归位搬回来。"""
+    _make(tmp_root, "未识别/Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        row = _assets(connection)["未识别/Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi"]
+        assert row["code"] == "N0926" and row["content_type"] == "uncensored"
+    finally:
+        connection.close()
+
+
+def test_dir_fallback_does_not_override_a_user_code(tmp_root: Path):
+    _make(tmp_root, "Tokyo-Hot n0926 東熱強制プレイに半泣き/_n0926.avi")
+    paths = ShelfPaths(tmp_root)
+    connection = db.connect(paths)
+    try:
+        scan(connection, paths, ShelfConfig())
+        asset_id = next(iter(_assets(connection).values()))["id"]
+        write_owned_fields(connection, "asset", asset_id, [FieldWrite("code", "N0001", USER_MANUAL)])
+        scan(connection, paths, ShelfConfig())
+        row = next(iter(_assets(connection).values()))
+        assert row["code"] == "N0001" and owner_of(row["field_owners"], "code") == USER_MANUAL
+    finally:
+        connection.close()
