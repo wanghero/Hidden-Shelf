@@ -330,3 +330,10 @@ def test_cooldown_left_by_earlier_run_skips_only_that_source(disk):
     assert transport.count("javbus.com") == 2, "avbase 冷却，两个番号的 javbus 都照问"
     assert any("avbase 暂停" in line for line in lines)
     assert not any("本趟" in line for line in lines if "暂停" not in line)
+
+
+def test_every_settled_field_has_a_name_in_the_progress_line():
+    """`policy.FIELDS` 里每个字段都要在进度行里有名字，不然刮到了也看不出来（v1.4.16 补的 `plot`）。"""
+    from hidden_shelf.scrape.policy import FIELDS
+    from hidden_shelf.scrape.run import _FIELD_LABELS
+    assert set(FIELDS) <= set(_FIELD_LABELS), sorted(set(FIELDS) - set(_FIELD_LABELS))

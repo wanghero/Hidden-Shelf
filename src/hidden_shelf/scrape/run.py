@@ -37,9 +37,11 @@ Progress = Callable[[str], None]
 NETWORK_DOWN_AFTER = 3
 #: 封面在快照里记「没有」时用的来源名。
 COVER_SNAPSHOT = "cover"
-#: 进度行里的字段名。
+#: 进度行里的字段名。**要盖住 `policy.FIELDS` 的每一项**：这里没登记的字段结算了也不会在进度行
+#: 与日志里出现，看日志的人就以为没刮到。v1.4.15 之前漏了 `plot`，`N0743 ← tokyohot · 标题/厂牌/
+#: 系列/发行日/演员/标签` 这行其实同时写进了 1519 字的简介，日志上一个字都看不出来。
 _FIELD_LABELS = {"title": "标题", "original_title": "原题", "studio": "厂牌", "series": "系列",
-                 "release_date": "发行日", "performers": "演员", "tags": "标签"}
+                 "release_date": "发行日", "performers": "演员", "tags": "标签", "plot": "简介"}
 
 
 @dataclass
