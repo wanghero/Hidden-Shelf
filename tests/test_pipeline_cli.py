@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 from hidden_shelf import cli, pipeline
+from hidden_shelf.config import ShelfConfig
 from hidden_shelf.paths import SHELF_DIR, ShelfLayoutConflict, ShelfPaths
 
 
@@ -34,7 +35,8 @@ def test_run_end_to_end(disk):
         assert not (disk / name).exists(), name
     legacy = disk / SHELF_DIR / "legacy" / "ABP-758"
     assert (legacy / "ABP-758.nfo").is_file() and (legacy / "ABP-758-poster.jpg").is_file()
-    assert (disk / SHELF_DIR / "sheets" / "ABP-758.jpg").is_file()
+    # 九宫格默认不做（用户 2026-11-02 定：媒体步最耗时的部分，大多数人看的是封面）。
+    assert not (disk / SHELF_DIR / "sheets" / "ABP-758.jpg").exists()
     assert (disk / SHELF_DIR / "covers" / "ABP-758.jpg").is_file()
     assert (disk / "index.html").is_file()
     assert '"ABP-758"' in (disk / SHELF_DIR / "site" / "data" / "works.js").read_text(encoding="utf-8")
@@ -45,6 +47,14 @@ def test_run_end_to_end(disk):
         assert runs == [("scan", "ok"), ("import", "ok"), ("scrape", "ok"), ("organize", "ok"), ("media", "ok"), ("build", "ok")]
         assert connection.execute("SELECT count(*) FROM asset WHERE vanished=1").fetchone()[0] == 0
         assert connection.execute("SELECT path FROM asset WHERE code='ABP-758'").fetchone()[0] == "Prestige/ABP-758 标题-甲/ABP-758.mp4"
+
+
+def test_sheets_are_made_when_the_disk_asks_for_them(disk):
+    """默认不做，盘上开了就做：`ShelfConfig.sheets` 是唯一开关，命令行与网页都只是在改它。"""
+    result = pipeline.run(disk, config=ShelfConfig(sheets=True), progress=pipeline.ConsoleProgress())
+    assert result.ok, result.error
+    assert (disk / SHELF_DIR / "sheets" / "ABP-758.jpg").is_file()
+    assert result.steps["media"]["sheets"] >= 1
 
 
 def test_run_twice_is_stable(disk):

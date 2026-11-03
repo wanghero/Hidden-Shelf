@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--dir-template", help="本次使用的目录模板，如 {studio}/{code}")
         sub.add_argument("--file-template", help="本次使用的文件名模板，如 {code}[-cd{cd}]")
         sub.add_argument("--sheets", action=argparse.BooleanOptionalAction, default=None,
-                         help="媒体步要不要做九宫格（--no-sheets 跳过，最省时间）；不写则按盘上配置")
+                         help="媒体步要不要做九宫格（默认不做，--sheets 打开）；不写则按盘上配置")
         sub.add_argument("--language", choices=("zh", "en", "ja"), help="站点默认语言（zh / en / ja）")
         sub.add_argument("--offline", action="store_true", help="本次跳过联网刮削")
         sub.add_argument("--dry-run", action="store_true",

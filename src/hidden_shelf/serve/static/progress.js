@@ -126,7 +126,7 @@
   }
   var view = viewFromHash();
   /* 表单值与视图无关，存在这里；切页重建 DOM 时从这里回填。images/sheets 是盘的设置，开始时一并发给服务端写进盘上配置。 */
-  var opts = { root: '', move: true, offline: false, dryRun: false, force: false, images: true, sheets: true };
+  var opts = { root: '', move: true, offline: false, dryRun: false, force: false, images: true, sheets: false };
 
   function api(method, path, body) {
     var options = { method: method, headers: { 'X-Shelf-Request': '1' } };

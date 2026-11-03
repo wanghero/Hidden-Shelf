@@ -45,7 +45,7 @@ One `shelf run` goes through six steps:
 2. **Import local data**: reads NFO files and covers left by earlier scrapers, plus your hand-written `HiddenShelf/overrides.json`.
 3. **Scrape online**: asks the sources for title, studio, performers, tags, release date, cover and avatars where data is missing; offline it just skips, the later steps still run.
 4. **Organize**: renames into `studio/code title-performers/code[-cdN].ext`; videos without a recognizable code go to `未识别/` ("unrecognized").
-5. **Media**: probes duration and resolution, extracts frames for a contact sheet, uses a frame as the cover when none exists, crops a portrait poster.
+5. **Media**: probes duration and resolution, uses a frame as the cover when none exists, crops a portrait poster. Contact sheets (nine frames in one image) are **off by default** — they are the slow part of this step; turn them on from the Settings page of the progress web page, or pass `--sheets`.
 6. **Build**: writes `index.html` at the disk root, an offline poster wall with filters by performer, studio and tag; click to play.
 
 **Safety promises** (each pinned by tests):

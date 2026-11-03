@@ -31,7 +31,9 @@ def _child_library(root: Path, fake_video) -> Path:
                      "performers": ["甲", "乙"], "tags": ["巨乳"]},
         "SSNI-100": {"title": "第二部", "studio": "S1", "performers": ["丙"]},
     }, ensure_ascii=False), encoding="utf-8")
-    result = pipeline.run(child, config=ShelfConfig(), steps=("scan", "import", "organize", "media", "build"))
+    # 子库显式开九宫格（默认不做了）：这个测试要验证封面、海报、九宫格都跟着合并过来。
+    result = pipeline.run(child, config=ShelfConfig(sheets=True),
+                          steps=("scan", "import", "organize", "media", "build"))
     assert result.ok, result.error
     assert (child / "index.html").is_file()
     # 模拟联网刮削留下的痕迹：问过的时间、快照文件、艺人头像

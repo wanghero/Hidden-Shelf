@@ -32,10 +32,14 @@ class ShelfConfig:
     language: str = "zh"
     #: 是否联网刮削（计划 2）。关掉就只走本地流水线。
     scrape: bool = True
-    #: 把封面与九宫格复制一份到视频所在目录（`<番号>-cover.jpg`、`<主名>-sheet.jpg`；计划 9）。默认不放。
+    #: 把封面与九宫格复制一份到视频所在目录（`<番号>-cover.jpg`、`<主名>-sheet.jpg`；计划 9）。
+    #: 默认放（用户 2026-10-30 定）。
     images_in_work_dir: bool = True
-    #: 媒体步要不要做九宫格（抽 9 帧拼图，最耗时的一步）；关掉只跳过生成，已有的不删。
-    sheets: bool = True
+    #: 媒体步要不要做九宫格（抽 9 帧拼图，媒体步最耗时的部分）。**默认不做**（用户 2026-11-02 定）：
+    #: 一部片要解码九个位置，上千部片能跑几个钟头，而大多数人看的是封面。要就在进度网页的「设置」页
+    #: 打开，或命令行 `--sheets`。关掉只跳过生成，已有的九宫格照常登记、不删。
+    #: 盘上 `config.json` 里存过值的老盘不受这个默认值影响（那是用户自己的选择）。
+    sheets: bool = False
 
     @classmethod
     def load(cls, paths: ShelfPaths) -> "ShelfConfig":
