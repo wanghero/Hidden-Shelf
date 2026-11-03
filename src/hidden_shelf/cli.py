@@ -9,8 +9,8 @@ from pathlib import Path
 
 from . import __version__, pipeline
 from .config import ShelfConfig
-from .paths import (SHELF_DIR, RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable,
-                    migrate_legacy_dir)
+from .paths import (SHELF_DIR, RootNotWritable, RootUnavailable, ShelfLayoutConflict, ShelfPaths, check_available,
+                    check_layout, check_writable, migrate_legacy_dir)
 
 COMMANDS = {
     "run": ("全流程：扫描 → 导入本地资料 → 联网刮削 → 归位 → 媒体 → 出站", pipeline.STEPS),
@@ -104,6 +104,11 @@ def _print_config(root: str | None) -> int:
         print("来源链覆盖：" + json.dumps(summary["routes"], ensure_ascii=False))
     if root:
         target = Path(root).expanduser()
+        try:
+            check_available(target)
+        except RootUnavailable as error:
+            print(str(error), file=sys.stderr)
+            return 2
         if not target.is_dir():
             print(f"盘根目录不存在或不是目录：{target}", file=sys.stderr)
             return 2
@@ -165,6 +170,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         return _serve(args)
     root = Path(args.root).expanduser()
+    try:
+        # 顺序要紧：掉线的网络盘上 `is_dir()` 自己就会扔 ENOTCONN，得先把它翻成人话。
+        check_available(root)
+    except RootUnavailable as error:
+        print(str(error), file=sys.stderr)
+        return 2
     if not root.is_dir():
         print(f"盘根目录不存在或不是目录：{root}", file=sys.stderr)
         return 2
@@ -175,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         # 老盘迁移必须在读配置之前：读配置本身不建目录，但后面任何一步都可能建 HiddenShelf/。
         if migrate_legacy_dir(root):
             print(pipeline.MIGRATED_NOTE)
-    except (RootNotWritable, ShelfLayoutConflict) as error:
+    except (RootNotWritable, RootUnavailable, ShelfLayoutConflict) as error:
         print(str(error), file=sys.stderr)
         return 2
     paths = ShelfPaths(root)
@@ -202,8 +213,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = pipeline.run(root, config=config, steps=steps, progress=progress, scrape_options=options,
                               dry_run=args.dry_run)
-    except (RootNotWritable, ShelfLayoutConflict) as error:
-        # 前置检查之后、开跑之前盘变了（有人复制了目录、盘被改成只读）：说人话，不甩 traceback。
+    except (RootNotWritable, RootUnavailable, ShelfLayoutConflict) as error:
+        # 前置检查之后、开跑之前盘变了（有人复制了目录、盘被改成只读、网络盘掉了线）：说人话，不甩 traceback。
         print(str(error), file=sys.stderr)
         return 2
     if not result.ok:

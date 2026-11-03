@@ -7,15 +7,20 @@ from pathlib import Path
 from hidden_shelf import pipeline
 
 
-def fake_pipeline(*, fail=(), skip=(), gate: threading.Event | None = None, check_cancel=False, raise_error=None):
-    """假流水线：按步调用 progress 回调；`gate` 阻塞在第一步后；`check_cancel` 每步后查取消。"""
+def fake_pipeline(*, fail=(), skip=(), gate: threading.Event | None = None, check_cancel=False, raise_error=None,
+                  raise_at=None):
+    """假流水线：按步调用 progress 回调；`gate` 阻塞在第一步后；`check_cancel` 每步后查取消。
+
+    `raise_error` 一进来就抛（第一步都没开过）；配上 `raise_at=<步名>` 则在那一步开了头之后才抛，
+    而且**不**调 `progress.failed`——真实情况就是这样：盘掉线时连「记一笔失败」都写不进去。
+    """
     calls = []
 
     def run(root, *, config=None, steps=pipeline.STEPS, progress=None, scrape_options=None, cancel=None,
             dry_run=False):
         calls.append({"root": root, "steps": tuple(steps), "move": config.move_unrecognized if config else None,
                       "offline": scrape_options.offline if scrape_options else None, "dry_run": dry_run})
-        if raise_error:
+        if raise_error and raise_at is None:
             raise raise_error
         result = pipeline.RunResult(log_path=Path(root) / "HiddenShelf" / "logs" / "x.log", dry_run=dry_run)
         for index, name in enumerate(steps):
@@ -23,6 +28,9 @@ def fake_pipeline(*, fail=(), skip=(), gate: threading.Event | None = None, chec
                 result.cancelled = True
                 break
             progress.step(name)
+            if raise_error is not None and name == raise_at:
+                progress.advance(1, f"[1/2] {name} 第一行")
+                raise raise_error
             if name in skip:
                 progress.skipped(name, "--offline")
                 result.steps[name] = {"skipped": True}

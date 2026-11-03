@@ -120,8 +120,9 @@ class ShelfPaths:
             try:
                 directory.mkdir(parents=True, exist_ok=True)
             except OSError as error:
-                if error.errno in _NOT_WRITABLE_ERRNOS:
-                    raise RootNotWritable(self.root, error.errno) from error
+                translated = root_error(self.root, error)
+                if translated is not None:
+                    raise translated from error
                 raise
         if not self.config.is_file():
             from .config import ShelfConfig  # 局部导入：config 依赖本模块
@@ -170,6 +171,17 @@ class ShelfPaths:
 
 #: 建目录时这些错误码都意味着「这块盘写不了」，不是程序的问题。
 _NOT_WRITABLE_ERRNOS = frozenset({errno.EROFS, errno.EACCES, errno.EPERM})
+#: 盘「连不上」的错误码。和只读、没权限不是一回事：挂载点还在、`ls /Volumes` 还列得出来，
+#: 系统却已经读不到里面的内容了——网络盘（SMB/NFS）在服务器重启、休眠或断网之后最常这样，
+#: 外接盘被拔掉也是。这类毛病重连之后接着跑就行，所以要和「这块盘根本写不了」分开说。
+_UNAVAILABLE_ERRNOS = frozenset({errno.ENOTCONN, errno.ESTALE, errno.ENODEV, errno.ENXIO, errno.EIO,
+                                 errno.ETIMEDOUT, errno.EHOSTDOWN, errno.EHOSTUNREACH,
+                                 errno.ENETDOWN, errno.ENETUNREACH, errno.ECONNRESET, errno.ECONNABORTED})
+#: 这些错误码各自的人话。表里没有的用 `os.strerror`。
+_UNAVAILABLE_CAUSES = {errno.ENOTCONN: "网络盘的连接断了", errno.ESTALE: "挂载点失效了",
+                       errno.ENODEV: "设备不在了", errno.ENXIO: "设备不在了", errno.EIO: "读写出错",
+                       errno.ETIMEDOUT: "连接超时", errno.EHOSTDOWN: "服务器关着",
+                       errno.EHOSTUNREACH: "连不到服务器"}
 
 
 class RootNotWritable(OSError):
@@ -187,6 +199,52 @@ def writability_hint(root: Path, code: int = errno.EROFS) -> str:
     return (f"盘根目录不可写：{root}。{cause}。藏片阁要在盘根目录写 {SHELF_DIR}/ 和 index.html，所以跑不了。"
             "最常见的原因是 macOS 默认把 NTFS 格式的盘只读挂载：装 NTFS 驱动（Paragon、Tuxera 等），"
             "或把盘改成 exFAT/APFS；也检查一下盘的写保护开关和「显示简介 → 共享与权限」。")
+
+
+class RootUnavailable(OSError):
+    """盘连不上：挂载点还在，系统却读不到它（网络盘掉线、服务器重启、外接盘拔了）。
+
+    `errno` 是原因（见 `_UNAVAILABLE_ERRNOS`），`str()` 是给用户看的话。和 `RootNotWritable`
+    分成两个类是因为两件事该做的完全不同：那个要换驱动或换格式，这个只要重新连上盘再跑一次。
+    """
+
+    def __init__(self, root: Path, code: int = errno.ENOTCONN) -> None:
+        super().__init__(code, unavailable_hint(root, code), str(root))
+
+    def __str__(self) -> str:
+        return str(self.strerror)
+
+
+def unavailable_hint(root: Path, code: int = errno.ENOTCONN) -> str:
+    cause = _UNAVAILABLE_CAUSES.get(code) or os.strerror(code)
+    return (f"盘连不上：{root}（{cause}）。目录还在，但系统已经读不到里面的内容了——"
+            "网络盘（SMB/NFS）在服务器重启、休眠或断网之后最常这样。"
+            "在访达里把这块盘退出再重新连接（或者 umount 后重新挂载），确认能打开它的目录，再跑一次。"
+            "外接盘则检查数据线和供电。已经做完的步骤都记在库里，重跑会接着做没做完的那部分。")
+
+
+def root_error(root: Path, error: OSError) -> OSError | None:
+    """文件操作抛出来的 `OSError` → 带「怎么办」的那两个类；不是盘本身的毛病返回 None。"""
+    if error.errno in _UNAVAILABLE_ERRNOS:
+        return RootUnavailable(root, error.errno)
+    if error.errno in _NOT_WRITABLE_ERRNOS:
+        return RootNotWritable(root, error.errno)
+    return None
+
+
+def check_available(root: Path) -> None:
+    """开跑之前确认盘还读得到；读不到抛 `RootUnavailable`（带怎么办）。
+
+    不能只靠 `Path.is_dir()`：掉线的 SMB 挂载点上 `stat` 抛的是 `ENOTCONN`，而 `is_dir()` 对这个
+    错误码不吞、直接往外扔，于是网页上只剩一句 `OSError: [Errno 57] Socket is not connected`
+    （2026-11-03 用户的服务器重启之后看到的就是这句）。`ENOENT` 这类「真的没有」不在这里管，
+    留给调用方照旧按「盘根目录不存在」报。
+    """
+    try:
+        os.stat(root)
+    except OSError as error:
+        if error.errno in _UNAVAILABLE_ERRNOS:
+            raise RootUnavailable(root, error.errno) from error
 
 
 def check_writable(root: Path) -> None:
@@ -223,7 +281,8 @@ def migrate_legacy_dir(root: Path) -> bool:
     try:
         os.rename(legacy, root / SHELF_DIR)
     except OSError as error:
-        if error.errno in _NOT_WRITABLE_ERRNOS:
-            raise RootNotWritable(root, error.errno) from error
+        translated = root_error(root, error)
+        if translated is not None:
+            raise translated from error
         raise
     return True

@@ -12,6 +12,7 @@ import sys
 import time
 import traceback
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,8 @@ from .local_import import import_local
 from .media import process_assets
 from .media.place import place_images
 from .organize.apply import organize, preview_organize
-from .paths import LEGACY_SHELF_DIR, SHELF_DIR, ShelfPaths, migrate_legacy_dir
+from .paths import (LEGACY_SHELF_DIR, SHELF_DIR, RootNotWritable, RootUnavailable, ShelfLayoutConflict,
+                    ShelfPaths, migrate_legacy_dir, root_error)
 from .scan import scan
 from .site.build import build_site
 
@@ -30,6 +32,43 @@ STEPS: tuple[str, ...] = ("scan", "import", "scrape", "organize", "media", "buil
 STEP_LABELS = {"scan": "扫描", "import": "导入", "scrape": "刮削", "organize": "归位", "media": "媒体", "build": "出站"}
 #: 失败不中断后续步的那一步。
 _SOFT_STEPS = frozenset({"scrape"})
+
+
+def failure_detail(root: Path, error: BaseException) -> str:
+    """失败原因的那一行字。盘掉线、盘只读这类 `OSError` 翻成人话，别的照旧带类型名。
+
+    不翻的话用户看到的就是 `OSError: [Errno 57] Socket is not connected`（2026-11-03 用户的
+    SMB 服务器重启，媒体步跑了 2 小时 28 分之后收到的就是这句），既看不出是盘掉了，也不知道该干什么。
+    """
+    if isinstance(error, (RootUnavailable, RootNotWritable, ShelfLayoutConflict)):
+        return str(error)
+    if isinstance(error, OSError):
+        translated = root_error(root, error)
+        if translated is not None:
+            return str(translated)
+    return f"{type(error).__name__}: {error}"
+
+
+def _quietly(action: Callable[[], object]) -> None:
+    """记账动作（写日志行、写 `run` 表、关文件）：盘已经掉线时它们会再炸一次。
+
+    这里必须吞掉——否则记账的异常会盖掉真正的失败原因往外扔，网页上既看不见是哪一步炸的
+    （那一步永远停在「运行中」），也看不见为什么。盘还好着的时候这些动作本来就不会失败。
+    """
+    try:
+        action()
+    except OSError:
+        pass
+
+
+@contextmanager
+def _log_handle(path: Path):
+    """运行日志文件的句柄。关的时候要把缓冲刷下去，盘已经掉线就会炸——那一下吞掉（见 `_quietly`）。"""
+    handle = path.open("a", encoding="utf-8")
+    try:
+        yield handle
+    finally:
+        _quietly(handle.close)
 #: 老盘迁移完给用户看的那一句（命令行、网页日志、运行日志文件三处同一句）。
 MIGRATED_NOTE = f"已把 {LEGACY_SHELF_DIR}/ 改名为 {SHELF_DIR}/，请重新出站（shelf run 会自动做）"
 
@@ -161,7 +200,7 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
 
     connection = db.connect(paths)
     try:
-        with result.log_path.open("a", encoding="utf-8") as handle:
+        with _log_handle(result.log_path) as handle:
             def write(line: str) -> None:
                 handle.write(f"{datetime.now().isoformat(timespec='seconds')} {line}\n")
                 handle.flush()
@@ -194,10 +233,16 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                 run_id = _run_started(connection, name)
                 try:
                     stats = _execute(name, connection, paths, config, emit, scrape_options, dry_run)
+                    # 成功那一笔记账也在同一个 try 里：盘要是刚好在这里掉线，这一步得算失败往外报，
+                    # 不能裸着扔个 OSError 出去（命令行会甩 traceback，网页会说「没能开始」）。
+                    _run_finished(connection, run_id, "ok", stats)
+                    write(f"完成：{json.dumps(stats, ensure_ascii=False)}")
                 except Exception as error:  # noqa: BLE001 - 任何一步失败都要记录
-                    detail = f"{type(error).__name__}: {error}"
-                    write(f"失败：{detail}\n{traceback.format_exc()}")
-                    _run_finished(connection, run_id, "failed", {"error": detail})
+                    detail = failure_detail(root, error)
+                    trace = traceback.format_exc()
+                    # 盘掉线时日志文件和库都在那块盘上，这两笔记账会再炸一次：吞掉，别盖掉真原因。
+                    _quietly(lambda: write(f"失败：{detail}\n{trace}"))
+                    _quietly(lambda: _run_finished(connection, run_id, "failed", {"error": detail}))
                     progress.failed(name, detail)
                     if name in _SOFT_STEPS:
                         result.steps[name] = {"error": detail}
@@ -205,15 +250,14 @@ def run(root: Path, *, config: ShelfConfig | None = None, steps: Sequence[str] =
                     result.ok = False
                     result.error = detail
                     result.failed_step = name
+                    result.steps.pop(name, None)
                     break
                 result.steps[name] = stats
-                _run_finished(connection, run_id, "ok", stats)
-                write(f"完成：{json.dumps(stats, ensure_ascii=False)}")
                 progress.done(stats)
             if result.ok and "build" in result.steps and not result.steps["build"].get("skipped"):
                 result.index_html = paths.index_html
     finally:
-        connection.close()
+        _quietly(connection.close)
     return result
 
 

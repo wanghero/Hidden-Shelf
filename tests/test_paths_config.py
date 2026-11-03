@@ -173,3 +173,43 @@ def test_old_default_dir_template_is_upgraded_but_a_custom_one_is_kept(tmp_root:
     # 自己写过模板的盘一个字不动——哪怕写的只是番号。
     paths.config.write_text(json.dumps({"dir_template": "{code}"}), encoding="utf-8")
     assert ShelfConfig.load(paths).dir_template == "{code}"
+
+
+def test_a_disconnected_network_disk_says_so_instead_of_errno_57(tmp_path: Path, monkeypatch):
+    """掉线的 SMB 挂载点：`stat` 抛 ENOTCONN，要翻成「盘连不上」而不是 `OSError: [Errno 57]`。"""
+    import errno
+    import os as os_module
+    from hidden_shelf.paths import RootUnavailable, check_available
+
+    def dead(path, *args, **kwargs):
+        raise OSError(errno.ENOTCONN, "Socket is not connected", str(path))
+
+    monkeypatch.setattr(os_module, "stat", dead)
+    with pytest.raises(RootUnavailable) as caught:
+        check_available(tmp_path)
+    message = str(caught.value)
+    assert "盘连不上" in message and "连接断了" in message and str(tmp_path) in message
+    assert "重新连接" in message and "重跑" in message
+    assert "Errno" not in message and "Socket" not in message
+    assert caught.value.errno == errno.ENOTCONN
+
+
+def test_a_missing_disk_is_not_called_unavailable(tmp_path: Path):
+    """盘根目录真的不存在是另一回事（调用方按「不存在」报），`check_available` 不拦。"""
+    from hidden_shelf.paths import check_available
+
+    check_available(tmp_path / "没有这个目录")
+
+
+def test_ensure_turns_a_disconnected_disk_into_root_unavailable(tmp_path: Path, monkeypatch):
+    """建 HiddenShelf/ 时盘掉了线：也要是「盘连不上」，不是裸 OSError。"""
+    import errno
+    from hidden_shelf.paths import RootUnavailable, ShelfPaths
+
+    def dead(self, *args, **kwargs):
+        raise OSError(errno.ENOTCONN, "Socket is not connected", str(self))
+
+    monkeypatch.setattr(Path, "mkdir", dead)
+    with pytest.raises(RootUnavailable) as caught:
+        ShelfPaths(tmp_path).ensure()
+    assert "盘连不上" in str(caught.value)

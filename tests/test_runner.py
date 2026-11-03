@@ -198,3 +198,55 @@ def test_disk_options_persist_to_config(tmp_root: Path, home: Path):
     assert manager.wait(timeout=10)
     saved = ShelfConfig.load(ShelfPaths(tmp_root))
     assert saved.sheets is False and saved.images_in_work_dir is False, "没给就按盘上配置，不改回默认"
+
+
+def test_a_disk_that_dies_mid_step_blames_that_step_not_the_startup(tmp_root: Path, home: Path):
+    """网络盘在媒体步掉线：那一步要记成失败，结果里要有步名。
+
+    2026-11-03 用户的 SMB 服务器重启，媒体步跑了 2 小时 28 分之后盘没了。当时页面上媒体永远停在
+    「运行中」，结果栏却写着「流水线没能开始：OSError: [Errno 57] Socket is not connected」——
+    两句话都是错的。`failed_step` 空着只应该表示「第一步之前就没成」。
+    """
+    import errno
+
+    dead = OSError(errno.ENOTCONN, "Socket is not connected", str(tmp_root))
+    manager = RunManager(home=home, run_pipeline=fake_pipeline(raise_error=dead, raise_at="media"))
+    run_id = manager.start(_options(tmp_root))
+    assert manager.wait(timeout=10)
+    events = manager.log_for(run_id).events
+    last = events[-1]
+    assert last.kind == "run.done" and last.stats["ok"] is False
+    assert last.stats["failed_step"] == "media", "中断在哪一步就要说哪一步"
+    assert "盘连不上" in last.stats["error"] and "重新连接" in last.stats["error"]
+    assert "Errno" not in last.stats["error"] and "Socket" not in last.stats["error"]
+    state = reduce_state(events)
+    assert state["steps"]["media"]["status"] == "failed", "不能永远停在运行中"
+    assert state["steps"]["scan"]["status"] == "done"
+    assert state["steps"]["build"]["status"] == "waiting"
+
+
+def test_a_failure_before_the_first_step_still_has_no_step_name(tmp_root: Path, home: Path):
+    """反过来：真的一步都没开过时 `failed_step` 仍是空串，网页照旧说「流水线没能开始」。"""
+    manager = RunManager(home=home, run_pipeline=fake_pipeline(raise_error=RuntimeError("建目录就炸了")))
+    run_id = manager.start(_options(tmp_root))
+    assert manager.wait(timeout=10)
+    last = manager.log_for(run_id).events[-1]
+    assert last.stats["failed_step"] == "" and "建目录就炸了" in last.stats["error"]
+
+
+def test_options_reject_a_disconnected_root_with_a_readable_reason(tmp_root: Path, monkeypatch):
+    """网页提交时盘已经掉线：返回的是人话，不是 `is_dir()` 漏出来的 ENOTCONN。"""
+    import errno
+    import os as os_module
+
+    real_stat = os_module.stat
+
+    def dead(path, *args, **kwargs):
+        if str(path) == str(tmp_root):
+            raise OSError(errno.ENOTCONN, "Socket is not connected", str(path))
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os_module, "stat", dead)
+    with pytest.raises(ValueError) as caught:
+        _options(tmp_root)
+    assert "盘连不上" in str(caught.value) and "Errno" not in str(caught.value)

@@ -18,8 +18,8 @@ from .. import pipeline
 from ..config import ShelfConfig
 from ..fsutil import atomic_write_text
 from ..netconfig import home as config_home
-from ..paths import (RootNotWritable, ShelfLayoutConflict, ShelfPaths, check_layout, check_writable,
-                     migrate_legacy_dir)
+from ..paths import (RootNotWritable, RootUnavailable, ShelfLayoutConflict, ShelfPaths, check_available,
+                     check_layout, check_writable, migrate_legacy_dir)
 from .events import Event, EventProgress, RunLog
 
 RECENT_LIMIT = 10
@@ -53,6 +53,11 @@ class RunOptions:
         if not raw_root:
             raise ValueError("请填写盘根目录")
         root = Path(raw_root).expanduser()
+        try:
+            # 掉线的网络盘上 `is_dir()` 自己就会扔 ENOTCONN，所以这一问必须在它前面。
+            check_available(root)
+        except RootUnavailable as error:
+            raise ValueError(str(error)) from None
         if not root.is_dir():
             raise ValueError(f"盘根目录不存在或不是目录：{raw_root}")
         try:
@@ -98,6 +103,17 @@ def _plain(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
     return value
+
+
+def _running_step(log: RunLog) -> str:
+    """日志里最后一个开了头、还没有结局的步名；一步都没开过返回空串。"""
+    running = ""
+    for event in log.events:
+        if event.kind == "step.start":
+            running = event.step or ""
+        elif event.kind in ("step.done", "step.failed", "step.skipped") and event.step == running:
+            running = ""
+    return running
 
 
 def reduce_state(events: list[Event], steps_order: tuple[str, ...] = pipeline.STEPS) -> dict:
@@ -206,9 +222,15 @@ class RunManager:
             stats = _plain(result)
             log.append("run.cancelled" if getattr(result, "cancelled", False) else "run.done", stats=stats)
         except Exception as error:  # noqa: BLE001 - 线程里的异常要落成事件，不能静默消失
-            detail = f"{type(error).__name__}: {error}"
+            detail = pipeline.failure_detail(options.root, error)
+            # 异常从 `pipeline.run` 里漏出来时，已经开跑的那一步得跟着记成失败：否则它永远停在
+            # 「运行中」，结果栏还会说「流水线没能开始」——2026-11-03 用户的网络盘在媒体步掉线，
+            # 页面上就是这副样子（媒体跑了 2 小时 28 分，却说没能开始）。
+            failed_step = _running_step(log)
             try:
-                log.append("run.done", stats={"ok": False, "error": detail, "failed_step": "", "steps": {}})
+                if failed_step:
+                    log.append("step.failed", step=failed_step, level="error", message=detail)
+                log.append("run.done", stats={"ok": False, "error": detail, "failed_step": failed_step, "steps": {}})
             except RuntimeError:
                 pass
         finally:

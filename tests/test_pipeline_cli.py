@@ -220,3 +220,48 @@ def test_cli_layout_conflict_from_pipeline_exits_2(tmp_root: Path, capsys, monke
     monkeypatch.setattr(cli.pipeline, "run", lambda *a, **k: (_ for _ in ()).throw(ShelfLayoutConflict(tmp_root)))
     assert cli.main(["scan", str(tmp_root)]) == 2
     assert "同时有" in capsys.readouterr().err
+
+
+def test_a_disk_that_dies_mid_step_is_reported_in_plain_words(disk, monkeypatch):
+    """媒体步跑着跑着盘掉线：结果里是人话，而且失败的是媒体步。
+
+    难点在于日志文件和库都在那块盘上，所以「记一笔失败」本身也会再炸一次——那一下要吞掉
+    （`pipeline._quietly`），否则记账的异常会盖掉真正的原因往外扔。
+    """
+    import errno
+
+    def dead(*args, **kwargs):
+        raise OSError(errno.ENOTCONN, "Socket is not connected", str(disk))
+
+    monkeypatch.setattr(pipeline, "process_assets", dead)
+    result = pipeline.run(disk, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert not result.ok and result.failed_step == "media"
+    assert "盘连不上" in result.error and "重新连接" in result.error
+    assert "Errno" not in result.error and "Socket" not in result.error
+
+
+def test_bookkeeping_that_cannot_be_written_does_not_hide_the_real_error(disk, monkeypatch):
+    """盘掉线后连「记一笔失败」都写不下去时，真正的原因照样要回到调用方手里。"""
+    import errno
+
+    def dead(*args, **kwargs):
+        raise OSError(errno.ENOTCONN, "Socket is not connected", str(disk))
+
+    monkeypatch.setattr(pipeline, "process_assets", dead)
+    monkeypatch.setattr(pipeline, "_run_finished",
+                        lambda connection, run_id, status, stats: dead() if status == "failed" else None)
+    result = pipeline.run(disk, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert not result.ok and result.failed_step == "media" and "盘连不上" in result.error
+
+
+def test_a_disk_that_dies_while_recording_a_good_step_is_still_a_clean_failure(disk, monkeypatch):
+    """盘在「这一步成了」那笔记账上掉线：也要是干净的失败，不是裸 OSError 往外扔。"""
+    import errno
+
+    def dead(connection, run_id, status, stats):
+        raise OSError(errno.ENOTCONN, "Socket is not connected", str(disk))
+
+    monkeypatch.setattr(pipeline, "_run_finished", dead)
+    result = pipeline.run(disk, scrape_options=pipeline.ScrapeOptions(offline=True))
+    assert not result.ok and result.failed_step == "scan" and "盘连不上" in result.error
+    assert "scan" not in result.steps
